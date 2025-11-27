@@ -1,4 +1,10 @@
 import { defineConfig } from "tsup";
+import pkg from "./package.json" assert { type: "json" };
+
+const externalDeps = Object.keys({
+  ...(pkg.dependencies || {}),
+  ...(pkg.peerDependencies || {})
+});
 
 export default defineConfig({
   entry: {
@@ -19,6 +25,6 @@ export default defineConfig({
   shebang: {
     cli: "#!/usr/bin/env node"
   },
-  noExternal: ["@actions/core", "@actions/github", "cac", "fast-glob", "picocolors", "pretty-bytes", "zod"]
+  external: externalDeps
 });
 

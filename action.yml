@@ -1,4 +1,4 @@
-name: "Overweight Guard"
+name: "Overweight"
 description: "Extensible bundle size guard with pluggable testers."
 author: "Yoav Niran"
 inputs:

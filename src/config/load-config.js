@@ -86,22 +86,36 @@ export const loadConfig = async ({ cwd = process.cwd(), configPath, inlineConfig
     return normalizeConfig(inlineConfig, { cwd: root, source: { type: "inline" } });
   }
 
+  const tryLoadConfig = async (candidatePath) => {
+    if (!(await fileExists(candidatePath))) {
+      return null;
+    }
+
+    const data = await readJson(candidatePath);
+    return normalizeConfig(data, { cwd: root, source: { type: "file", location: candidatePath } });
+  };
+
   if (configPath) {
     const absoluteConfig = path.resolve(root, configPath);
+    const loaded = await tryLoadConfig(absoluteConfig);
 
-    if (!(await fileExists(absoluteConfig))) {
+    if (!loaded) {
       throw new Error(`Could not find config file at "${absoluteConfig}"`);
     }
 
-    const data = await readJson(absoluteConfig);
-    return normalizeConfig(data, { cwd: root, source: { type: "file", location: absoluteConfig } });
+    return loaded;
   }
 
-  const defaultConfigPath = path.join(root, "overweight.config.json");
+  const defaultConfigPaths = ["overweight.json", "overweight.config.json"].map((file) =>
+    path.join(root, file)
+  );
 
-  if (await fileExists(defaultConfigPath)) {
-    const data = await readJson(defaultConfigPath);
-    return normalizeConfig(data, { cwd: root, source: { type: "file", location: defaultConfigPath } });
+  for (const candidate of defaultConfigPaths) {
+    const loaded = await tryLoadConfig(candidate);
+
+    if (loaded) {
+      return loaded;
+    }
   }
 
   const packageJsonPath = path.join(root, "package.json");
@@ -119,7 +133,7 @@ export const loadConfig = async ({ cwd = process.cwd(), configPath, inlineConfig
   }
 
   throw new Error(
-    "No overweight configuration found. Create an overweight.config.json file, add an `overweight` field to package.json, or pass --config."
+    "No overweight configuration found. Create an overweight.json (or overweight.config.json) file, add an `overweight` field to package.json, or pass --config."
   );
 };
 

@@ -1,0 +1,23 @@
+{
+  "files": [
+    {
+      "label": "dist-index",
+      "path": "./dist/index.js",
+      "maxSize": "5Kb",
+      "compression": "gzip"
+    },
+    {
+      "label": "dist-cli",
+      "path": "./dist/cli.js",
+      "maxSize": "6 kB",
+      "compression": "brotli"
+    },
+    {
+      "label": "dist-action",
+      "path": "./dist/action/index.js",
+      "maxSize": "20 kB",
+      "compression": "none"
+    }
+  ]
+}
+

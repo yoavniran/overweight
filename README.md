@@ -21,8 +21,8 @@ pnpm add -D overweight
 
 Keep your configuration close to your code:
 
+- `overweight.json` at the project root (default when the CLI runs without args).
 - `package.json` → `overweight` field (array or object with a `files` property).
-- `overweight.config.json`
 - Any JSON file referenced via `overweight --config path/to/config.json`.
 
 ```json
@@ -68,7 +68,7 @@ Available reporters: `console` (default), `json`, `silent`.
 ## Node API
 
 ```js
-import { runChecks, normalizeConfig } from "@overweight/guard";
+import { runChecks, normalizeConfig } from "overweight";
 
 const config = normalizeConfig({
   files: [{ path: "./dist/app.js", maxSize: "15 kB", compression: "brotli" }]
@@ -94,7 +94,7 @@ if (result.stats.hasFailures) {
 ## GitHub Action
 
 ```yaml
-name: bundle-size
+name: bundle-overweight-test
 
 on:
   pull_request:
@@ -110,11 +110,11 @@ jobs:
         with:
           version: 9
       - run: pnpm install
-      - uses: ./. # or uses: your-org/your-repo@v1 after publishing
+      - uses: yoavniran/overweight@v1 after publishing
         with:
           config: overweight.config.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          baseline-path: bundle-size-report.json
+          baseline-path: overweight-report.json
           baseline-branch: main
           update-baseline: true
 ```
@@ -124,7 +124,7 @@ jobs:
 
 ## Release & contributing
 
-- The project is ESM-only and built via `tsup` (no prettier required).
+- The project is ESM-only and built via `tsup`
 - Conventional commits are enforced via `simple-git-hooks` + `commitlint`.
 - `pnpm run release` triggers `semantic-release`, which:
   - Checks commit history,

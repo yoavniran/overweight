@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+
+always use conventional commit messages
+keep messages terse and technical with short sentences only
