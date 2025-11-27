@@ -7,6 +7,10 @@ permissions:
   pull-requests: write
   contents: write
 
+defaults:
+    run:
+        shell: bash
+
 jobs:
 
   release:
@@ -25,6 +29,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test
       - run: pnpm run build
+
       - run: pnpm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
