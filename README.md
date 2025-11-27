@@ -63,7 +63,12 @@ pnpm overweight --reporter json
 pnpm overweight --file "dist/*.js" --max-size "15 kB" --compression brotli
 ```
 
-Available reporters: `console` (default), `json`, `silent`.
+Available reporters: `console` (default), `json`, `json-file`, `silent`.
+
+```sh
+# emit a machine-readable report
+pnpm overweight --reporter json-file --report-file ./reports/overweight.json
+```
 
 ## Node API
 
@@ -110,17 +115,21 @@ jobs:
         with:
           version: 9
       - run: pnpm install
-      - uses: yoavniran/overweight@v1 after publishing
+      - uses: your-org/overweight@v1
         with:
-          config: overweight.config.json
+          config: overweight.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           baseline-path: overweight-report.json
           baseline-branch: main
           update-baseline: true
+          report-file: overweight-report.json
 ```
 
-- `report-json` and `report-table` outputs enable downstream workflows (PR comments, Slack alerts, etc.).
-- When `baseline-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the baseline branch, mirroring the workflow React Uploady uses today.
+- `report-json`, `report-table`, and `report-file` outputs enable downstream workflows (PR comments, Slack alerts, artifact uploads, etc.).
+- When `baseline-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the baseline branch
+- `comment-on-pr-always` (first run only) and `comment-on-pr-each-run` control when PR comments are posted even if checks pass.
+- `baseline-create-pr` opens a dedicated branch + PR when the baseline needs to change. Needed for protected default branches. Customize the PR via `baseline-pr-*` inputs.
+- Additional outputs (`report-file`, `baseline-pr-url`, `baseline-pr-number`) make it easy to chain artifact uploads or follow-up workflows.
 
 ## Release & contributing
 

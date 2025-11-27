@@ -18,6 +18,14 @@ inputs:
     description: "Comment on pull requests when checks fail."
     required: false
     default: "true"
+  comment-on-pr-always:
+    description: "Also comment on the first PR run even when all checks pass."
+    required: false
+    default: "false"
+  comment-on-pr-each-run:
+    description: "Comment on every PR run regardless of the result."
+    required: false
+    default: "false"
   baseline-path:
     description: "Optional path to a JSON file with baseline results."
     required: false
@@ -29,6 +37,29 @@ inputs:
     description: "Persist the new baseline file when running on the baseline branch."
     required: false
     default: "false"
+  baseline-create-pr:
+    description: "Open a branch + pull request with the updated baseline instead of updating in-place."
+    required: false
+    default: "false"
+  baseline-pr-title:
+    description: "Title for the automatically created baseline pull request."
+    required: false
+    default: "chore: update bundle size baseline"
+  baseline-pr-body:
+    description: "Body for the automatically created baseline pull request."
+    required: false
+    default: "This PR refreshes the bundle size baseline."
+  baseline-pr-branch-prefix:
+    description: "Prefix used when generating branches for baseline PRs."
+    required: false
+    default: "overweight/baseline"
+  baseline-pr-labels:
+    description: "Comma-separated labels added to the baseline PR."
+    required: false
+  report-file:
+    description: "File path where the json report will be written."
+    required: false
+    default: "overweight-report.json"
 outputs:
   report-json:
     description: "Serialized JSON report describing every bundle check."
@@ -38,6 +69,12 @@ outputs:
     description: "true if any check failed."
   baseline-updated:
     description: "true if the baseline report file was updated."
+  report-file:
+    description: "Absolute path to the generated json report."
+  baseline-pr-url:
+    description: "URL of the baseline update pull request (when created)."
+  baseline-pr-number:
+    description: "Number of the baseline update pull request (when created)."
 runs:
   using: "node20"
   main: "dist/action/index.js"

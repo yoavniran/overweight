@@ -6,6 +6,7 @@ import github from "@actions/github";
 
 import { loadConfig, normalizeConfig } from "../config/load-config.js";
 import { runChecks } from "../core/run-checks.js";
+import { jsonFileReporter } from "../reporters/json-file-reporter.js";
 import { formatDiff } from "../utils/size.js";
 
 const statusEmoji = (row) => {
@@ -117,6 +118,92 @@ const renderHtmlTable = (rows) => {
   return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
 };
 
+const getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
+
+const ensureRelativePath = (absolutePath) => {
+  const workspaceRoot = getWorkspaceRoot();
+  const relative = path.relative(workspaceRoot, absolutePath);
+
+  if (relative.startsWith("..")) {
+    throw new Error(`Baseline path "${absolutePath}" is outside of the repository checkout (${workspaceRoot}).`);
+  }
+
+  return relative.replace(/\\/g, "/");
+};
+
+const sanitizeBranchName = (prefix) =>
+  `${prefix || "overweight/baseline"}`.replace(/\/+$/, "");
+
+const parseLabels = (labels) =>
+  labels
+    ?.split(",")
+    .map((label) => label.trim())
+    .filter(Boolean) ?? [];
+
+const createBaselinePullRequest = async ({
+  baselinePath,
+  baseBranch,
+  title,
+  body,
+  branchPrefix,
+  labels,
+  token
+}) => {
+  const octokit = github.getOctokit(token);
+  const { owner, repo } = github.context.repo;
+  const baseRef = await octokit.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${baseBranch}`
+  });
+
+  const branchName = `${sanitizeBranchName(branchPrefix)}/${new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
+
+  await octokit.git.createRef({
+    owner,
+    repo,
+    ref: `refs/heads/${branchName}`,
+    sha: baseRef.data.object.sha
+  });
+
+  const repoRelativePath = ensureRelativePath(baselinePath);
+  const fileContent = await fs.readFile(baselinePath, "utf-8");
+
+  await octokit.repos.createOrUpdateFileContents({
+    owner,
+    repo,
+    path: repoRelativePath,
+    message: title,
+    content: Buffer.from(fileContent, "utf-8").toString("base64"),
+    branch: branchName
+  });
+
+  const pr = await octokit.pulls.create({
+    owner,
+    repo,
+    head: branchName,
+    base: baseBranch,
+    title,
+    body
+  });
+
+  const parsedLabels = parseLabels(labels);
+  if (parsedLabels.length) {
+    await octokit.issues.addLabels({
+      owner,
+      repo,
+      issue_number: pr.data.number,
+      labels: parsedLabels
+    });
+  }
+
+  core.info(`Opened baseline update PR #${pr.data.number} (${pr.data.html_url})`);
+  core.setOutput("baseline-pr-number", String(pr.data.number));
+  core.setOutput("baseline-pr-url", pr.data.html_url);
+};
+
 const buildInlineConfig = (input) => {
   if (!input) {
     return null;
@@ -169,6 +256,12 @@ const getBranchName = () =>
 const runAction = async () => {
   try {
     const config = await resolveConfig();
+    const githubToken = core.getInput("github-token");
+    const commentOnFailure = core.getBooleanInput("comment-on-pr");
+    const commentOnFirstRun = core.getBooleanInput("comment-on-pr-always");
+    const commentOnEachRun = core.getBooleanInput("comment-on-pr-each-run");
+    const prPayload = github.context.payload.pull_request;
+    const prAction = github.context.payload.action;
     const result = await runChecks(config);
     const baseRows = buildSummaryRows(result.results);
 
@@ -178,6 +271,13 @@ const runAction = async () => {
       : null;
     const baselineData = baselinePath ? await readBaseline(baselinePath) : null;
     const summaryRows = mergeWithBaseline(baseRows, baselineData);
+    const reportFileInput = core.getInput("report-file") || "overweight-report.json";
+    jsonFileReporter(result, {
+      reportFile: reportFileInput,
+      cwd: config.root,
+      silent: true
+    });
+    const resolvedReportPath = path.resolve(config.root, reportFileInput);
 
     core.summary.addHeading("📦 Bundle Size Report");
     core.summary.addTable(toTableData(summaryRows));
@@ -188,26 +288,55 @@ const runAction = async () => {
     core.setOutput("report-json", JSON.stringify({ rows: summaryRows, stats: result.stats }));
     core.setOutput("report-table", htmlTable);
     core.setOutput("has-failures", String(result.stats.hasFailures));
+    core.setOutput("report-file", resolvedReportPath);
 
     if (baselinePath) {
       const targetBranch = core.getInput("baseline-branch") || "main";
       const updateBaseline = core.getBooleanInput("update-baseline");
+      const createBaselinePr = core.getBooleanInput("baseline-create-pr");
       const currentBranch = getBranchName();
 
-      if (updateBaseline && currentBranch === targetBranch) {
-        await writeBaseline(baselinePath, summaryRows);
-        core.info(`Saved updated baseline report to ${baselinePath}`);
-        core.setOutput("baseline-updated", "true");
+      if (updateBaseline) {
+        if (createBaselinePr) {
+          if (!githubToken) {
+            core.setFailed("baseline-create-pr requires github-token to be set.");
+          } else {
+            await writeBaseline(baselinePath, summaryRows);
+            await createBaselinePullRequest({
+              baselinePath,
+              baseBranch: targetBranch,
+              title: core.getInput("baseline-pr-title") || "chore: update bundle size baseline",
+              body: core.getInput("baseline-pr-body") || "This PR refreshes the bundle size baseline.",
+              branchPrefix: core.getInput("baseline-pr-branch-prefix") || "overweight/baseline",
+              labels: core.getInput("baseline-pr-labels") || "",
+              token: githubToken
+            });
+            core.setOutput("baseline-updated", "true");
+          }
+        } else if (currentBranch === targetBranch) {
+          await writeBaseline(baselinePath, summaryRows);
+          core.info(`Saved updated baseline report to ${baselinePath}`);
+          core.setOutput("baseline-updated", "true");
+        } else {
+          core.info(
+            `Skipping baseline update because current branch "${currentBranch}" does not match target branch "${targetBranch}". Enable baseline-create-pr to open a pull request automatically.`
+          );
+        }
       }
     }
 
-    const githubToken = core.getInput("github-token");
-    const shouldComment = core.getBooleanInput("comment-on-pr");
+    const shouldCommentOnSuccess =
+      prPayload &&
+      (commentOnEachRun || (commentOnFirstRun && prAction === "opened"));
+    const shouldCommentOnFailure = result.stats.hasFailures && commentOnFailure;
+    if (githubToken && (shouldCommentOnFailure || shouldCommentOnSuccess)) {
+      const statusText = result.stats.hasFailures
+        ? "Bundle size check failed"
+        : "Bundle size report";
 
-    if (githubToken && shouldComment && result.stats.hasFailures) {
       await commentOnPullRequest(
         githubToken,
-        `Bundle size check failed:\n\n${htmlTable}`
+        `${statusText}:\n\n${htmlTable}`
       );
     }
 

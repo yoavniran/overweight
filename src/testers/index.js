@@ -1,71 +1,13 @@
-import { promisify } from "node:util";
-import { brotliCompress, constants, gzip } from "node:zlib";
+import { brotliTester } from "./brotli.js";
+import { gzipTester } from "./gzip.js";
+import { noneTester } from "./none.js";
+import { DEFAULT_TESTER_ID, createTester, normalizeTesterId } from "./shared.js";
 
-const gzipAsync = promisify(gzip);
-const brotliAsync = promisify(brotliCompress);
+export { DEFAULT_TESTER_ID } from "./shared.js";
 
-export const DEFAULT_TESTER_ID = "gzip";
-const NORMALIZED_TOKENS = new Set(["none", "gzip", "brotli"]);
-
-const createTester = ({ id, label, measure }) => {
-  if (!id || typeof measure !== "function") {
-    throw new Error("Tester definitions must include an id and a measure function");
-  }
-
-  return {
-    id,
-    label: label || id,
-    measure
-  };
-};
-
-const builtinTesters = new Map([
-  [
-    "none",
-    createTester({
-      id: "none",
-      label: "raw",
-      measure: async (buffer) => ({ bytes: buffer.byteLength })
-    })
-  ],
-  [
-    "gzip",
-    createTester({
-      id: "gzip",
-      label: "gzip",
-      measure: async (buffer) => {
-        const compressed = await gzipAsync(buffer);
-        return { bytes: compressed.byteLength };
-      }
-    })
-  ],
-  [
-    "brotli",
-    createTester({
-      id: "brotli",
-      label: "brotli",
-      measure: async (buffer) => {
-        const compressed = await brotliAsync(buffer, {
-          params: {
-            [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
-            [constants.BROTLI_PARAM_QUALITY]: 11
-          }
-        });
-
-        return { bytes: compressed.byteLength };
-      }
-    })
-  ]
-]);
-
-const normalizeTesterId = (value) => {
-  if (!value) {
-    return DEFAULT_TESTER_ID;
-  }
-
-  const normalized = value.toLowerCase();
-  return NORMALIZED_TOKENS.has(normalized) ? normalized : value;
-};
+const builtinTesters = new Map(
+  [noneTester, gzipTester, brotliTester].map((tester) => [tester.id, createTester(tester)])
+);
 
 export const createTesterRegistry = (customTesters) => {
   const registry = new Map(builtinTesters);
