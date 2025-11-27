@@ -115,7 +115,7 @@ jobs:
         with:
           version: 9
       - run: pnpm install
-      - uses: your-org/overweight@v1
+      - uses: yoavniran/overweight@v1
         with:
           config: overweight.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
