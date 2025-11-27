@@ -256,7 +256,7 @@ const commentOnPullRequest = async (token, body) => {
   const octokit = github.getOctokit(token);
   const { owner, repo } = github.context.repo;
 
-  const existingComments = await octokit.issues.listComments({
+  const existingComments = await octokit.rest.issues.listComments({
     owner,
     repo,
     issue_number: pullRequest.number,
@@ -273,7 +273,7 @@ const commentOnPullRequest = async (token, body) => {
 
   try {
     if (previous) {
-      await octokit.issues.updateComment({
+      await octokit.rest.issues.updateComment({
         owner,
         repo,
         comment_id: previous.id,
@@ -302,7 +302,7 @@ const commentOnPullRequest = async (token, body) => {
 const getBranchName = () =>
   process.env.GITHUB_REF_NAME || process.env.GITHUB_REF?.split("/").pop() || "";
 
-const runAction = async () => {
+export const runAction = async () => {
   try {
     const config = await resolveConfig();
     const githubToken = core.getInput("github-token");
@@ -397,5 +397,9 @@ const runAction = async () => {
   }
 };
 
-runAction();
+export default runAction;
+
+if (process.env.NODE_ENV !== "test") {
+  runAction();
+}
 
