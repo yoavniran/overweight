@@ -1,4 +1,4 @@
-name: release
+name: Overweight Release
 
 on:
   workflow_dispatch:
