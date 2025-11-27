@@ -241,13 +241,34 @@ const commentOnPullRequest = async (token, body) => {
     return;
   }
 
+  const isFork =
+    pullRequest.head?.repo?.full_name &&
+    pullRequest.base?.repo?.full_name &&
+    pullRequest.head.repo.full_name !== pullRequest.base.repo.full_name;
+
+  if (isFork) {
+    core.info("Skipping pull request comment because the PR originates from a fork.");
+    return;
+  }
+
   const octokit = github.getOctokit(token);
-  await octokit.rest.issues.createComment({
-    repo: github.context.repo.repo,
-    owner: github.context.repo.owner,
-    issue_number: pullRequest.number,
-    body
-  });
+  try {
+    await octokit.rest.issues.createComment({
+      repo: github.context.repo.repo,
+      owner: github.context.repo.owner,
+      issue_number: pullRequest.number,
+      body
+    });
+  } catch (error) {
+    if (error.status === 403) {
+      core.warning(
+        `Unable to comment on pull request due to permissions (403). Message: ${error.message}`
+      );
+      return;
+    }
+
+    throw error;
+  }
 };
 
 const getBranchName = () =>
@@ -279,7 +300,7 @@ const runAction = async () => {
     });
     const resolvedReportPath = path.resolve(config.root, reportFileInput);
 
-    core.summary.addHeading("📦 Bundle Size Report");
+    core.summary.addHeading("🧳 Overweight Size Report");
     core.summary.addTable(toTableData(summaryRows));
     await core.summary.write();
 
@@ -305,8 +326,8 @@ const runAction = async () => {
             await createBaselinePullRequest({
               baselinePath,
               baseBranch: targetBranch,
-              title: core.getInput("baseline-pr-title") || "chore: update bundle size baseline",
-              body: core.getInput("baseline-pr-body") || "This PR refreshes the bundle size baseline.",
+              title: core.getInput("baseline-pr-title") || "chore: update baseline report",
+              body: core.getInput("baseline-pr-body") || "This PR refreshes the baseline report",
               branchPrefix: core.getInput("baseline-pr-branch-prefix") || "overweight/baseline",
               labels: core.getInput("baseline-pr-labels") || "",
               token: githubToken
@@ -330,9 +351,9 @@ const runAction = async () => {
       (commentOnEachRun || (commentOnFirstRun && prAction === "opened"));
     const shouldCommentOnFailure = result.stats.hasFailures && commentOnFailure;
     if (githubToken && (shouldCommentOnFailure || shouldCommentOnSuccess)) {
-      const statusText = result.stats.hasFailures
-        ? "Bundle size check failed"
-        : "Bundle size report";
+      const statusText = result.stats.hasFailures ?
+       "Overweight: Size check failed" :
+       "Overweight: Size check passed";
 
       await commentOnPullRequest(
         githubToken,
@@ -341,7 +362,7 @@ const runAction = async () => {
     }
 
     if (result.stats.hasFailures) {
-      core.setFailed("One or more bundle size checks failed.");
+      core.setFailed("One or more size checks failed.");
     }
   } catch (error) {
     core.setFailed(error.message);
