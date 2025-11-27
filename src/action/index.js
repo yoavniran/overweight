@@ -233,6 +233,8 @@ const resolveConfig = async () => {
   return loadConfig({ cwd, configPath: configInput || undefined });
 };
 
+const REPORT_MARKER = "<!-- overweight-report -->";
+
 const commentOnPullRequest = async (token, body) => {
   const pullRequest = github.context.payload.pull_request;
 
@@ -252,13 +254,39 @@ const commentOnPullRequest = async (token, body) => {
   }
 
   const octokit = github.getOctokit(token);
+  const { owner, repo } = github.context.repo;
+
+  const existingComments = await octokit.issues.listComments({
+    owner,
+    repo,
+    issue_number: pullRequest.number,
+    per_page: 100
+  });
+
+  const previous = existingComments.data.find(
+    (comment) =>
+      comment?.user?.type === "Bot" &&
+      comment?.body?.includes(REPORT_MARKER)
+  );
+
+  const commentBody = `${REPORT_MARKER}\n${body}`;
+
   try {
-    await octokit.rest.issues.createComment({
-      repo: github.context.repo.repo,
-      owner: github.context.repo.owner,
-      issue_number: pullRequest.number,
-      body
-    });
+    if (previous) {
+      await octokit.issues.updateComment({
+        owner,
+        repo,
+        comment_id: previous.id,
+        body: commentBody
+      });
+    } else {
+      await octokit.rest.issues.createComment({
+        repo,
+        owner,
+        issue_number: pullRequest.number,
+        body: commentBody
+      });
+    }
   } catch (error) {
     if (error.status === 403) {
       core.warning(
