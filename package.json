@@ -1,0 +1,75 @@
+{
+  "name": "overweight",
+  "version": "0.0.0-development",
+  "description": "Extensible bundle size guard with pluggable testers, CLI, and GitHub Action.",
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    },
+    "./cli": "./dist/cli.js",
+    "./action": "./dist/action/index.js"
+  },
+  "bin": {
+    "overweight": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "action.yml",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm run test && pnpm run build",
+    "release": "semantic-release",
+    "prepare": "simple-git-hooks",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "bundlesize",
+    "bundle",
+    "size",
+    "ci",
+    "weight",
+    "gzip",
+    "brotli"
+  ],
+  "author": "Yoav Niran",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.1",
+    "cac": "^6.7.14",
+    "fast-glob": "^3.3.3",
+    "picocolors": "^1.1.1",
+    "pretty-bytes": "^7.1.0",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.2",
+    "@semantic-release/npm": "^13.1.2",
+    "@semantic-release/release-notes-generator": "^14.1.0",
+    "semantic-release": "^25.0.2",
+    "simple-git-hooks": "^2.13.1",
+    "tsup": "^8.5.1",
+    "vitest": "^4.0.14"
+  },
+  "simple-git-hooks": {
+    "commit-msg": "pnpm commitlint --edit \"$1\""
+  }
+}

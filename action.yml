@@ -1,0 +1,47 @@
+name: "Overweight Guard"
+description: "Extensible bundle size guard with pluggable testers."
+author: "Yoav Niran"
+inputs:
+  config:
+    description: "Path to an overweight configuration file."
+    required: false
+  files:
+    description: "JSON string that overrides the configuration files array."
+    required: false
+  working-directory:
+    description: "Directory to run the checks from."
+    required: false
+  github-token:
+    description: "Token used to comment on pull requests."
+    required: false
+  comment-on-pr:
+    description: "Comment on pull requests when checks fail."
+    required: false
+    default: "true"
+  baseline-path:
+    description: "Optional path to a JSON file with baseline results."
+    required: false
+  baseline-branch:
+    description: "Branch name that acts as the baseline when updating reports."
+    required: false
+    default: "main"
+  update-baseline:
+    description: "Persist the new baseline file when running on the baseline branch."
+    required: false
+    default: "false"
+outputs:
+  report-json:
+    description: "Serialized JSON report describing every bundle check."
+  report-table:
+    description: "HTML table that can be posted as a PR comment."
+  has-failures:
+    description: "true if any check failed."
+  baseline-updated:
+    description: "true if the baseline report file was updated."
+runs:
+  using: "node20"
+  main: "dist/action/index.js"
+branding:
+  color: "blue"
+  icon: "shield"
+

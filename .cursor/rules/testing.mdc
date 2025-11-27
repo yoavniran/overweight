@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+every file and function should be covered with unit tests that mock input data and ensure the output is as expected with all branches covered as well.

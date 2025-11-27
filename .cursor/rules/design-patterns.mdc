@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+
+- when working on components and functions always think how to design them as generic - pure functions that receive input and operate on it, returning results.
+As much as possible, avoid mutating global state.
+
+- functions and components should be compact and short, working on a single concern. 
+
+- for react components, always try to put state as close as possible to the area that needs it, to avoid large sections re-renders
+
+- avoid large files. create separate files per concern/component and import them rather than putting things inline
+
