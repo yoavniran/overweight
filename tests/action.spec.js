@@ -193,6 +193,7 @@ describe("GitHub Action integration", () => {
 
     expect(octokitMock.rest.issues.createComment).toHaveBeenCalledTimes(1);
     expect(octokitMock.rest.issues.createComment.mock.calls[0][0].body).toContain("Size check failed");
+    expect(octokitMock.rest.issues.listComments).toHaveBeenCalledTimes(1);
     expect(setFailed).toHaveBeenCalledWith("One or more size checks failed.");
   });
 
@@ -206,6 +207,7 @@ describe("GitHub Action integration", () => {
     await runAction();
 
     expect(octokitMock.rest.issues.createComment).toHaveBeenCalledTimes(1);
+    expect(octokitMock.rest.issues.listComments).toHaveBeenCalledTimes(1);
 
     octokitMock.rest.issues.listComments.mockResolvedValueOnce({
       data: [
@@ -226,6 +228,7 @@ describe("GitHub Action integration", () => {
 
     await runAction();
 
+    expect(octokitMock.rest.issues.listComments).toHaveBeenCalledTimes(2);
     expect(octokitMock.rest.issues.updateComment).toHaveBeenCalledTimes(1);
     expect(octokitMock.rest.issues.updateComment.mock.calls[0][0].comment_id).toBe(123);
     expect(octokitMock.rest.issues.updateComment.mock.calls[0][0].body).toContain("Size check passed");
@@ -242,6 +245,7 @@ describe("GitHub Action integration", () => {
 
     expect(octokitMock.rest.issues.createComment).toHaveBeenCalledTimes(1);
     expect(octokitMock.rest.issues.createComment.mock.calls[0][0].body).toContain("Size check passed");
+    expect(octokitMock.rest.issues.listComments).toHaveBeenCalledTimes(1);
     expect(setFailed).not.toHaveBeenCalled();
   });
 
@@ -264,6 +268,7 @@ describe("GitHub Action integration", () => {
     await runAction();
 
     expect(setFailed).not.toHaveBeenCalled();
+    expect(octokitMock.rest.issues.listComments).not.toHaveBeenCalled();
     expect(octokitMock.git.getRef).toHaveBeenCalled();
     expect(octokitMock.git.createRef).toHaveBeenCalled();
     expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(

@@ -141,15 +141,14 @@ const parseLabels = (labels) =>
     .filter(Boolean) ?? [];
 
 const createBaselinePullRequest = async ({
+  octokit,
   baselinePath,
   baseBranch,
   title,
   body,
   branchPrefix,
-  labels,
-  token
+  labels
 }) => {
-  const octokit = github.getOctokit(token);
   const { owner, repo } = github.context.repo;
   const baseRef = await octokit.git.getRef({
     owner,
@@ -244,14 +243,14 @@ const findExistingReportComment = async (octokit, pullRequest) => {
     per_page: 100
   });
 
-  return existingComments.data
+  const existing = existingComments.data
     .filter((comment) => comment?.user?.type === "Bot" && comment?.body?.includes(REPORT_MARKER))
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+
+  return existing || null;
 };
 
-const commentOnPullRequest = async (token, body) => {
-  const pullRequest = github.context.payload.pull_request;
-
+const commentOnPullRequest = async ({ octokit, pullRequest, body, existingComment }) => {
   if (!pullRequest) {
     core.info("No pull request found in the event payload; skipping comment.");
     return;
@@ -267,8 +266,10 @@ const commentOnPullRequest = async (token, body) => {
     return;
   }
 
-  const octokit = github.getOctokit(token);
-  const previous = await findExistingReportComment(octokit, pullRequest);
+  const previous =
+    existingComment !== undefined
+      ? existingComment
+      : await findExistingReportComment(octokit, pullRequest);
 
   const commentBody = `${REPORT_MARKER}\n${body}`;
 
@@ -307,6 +308,7 @@ export const runAction = async () => {
   try {
     const config = await resolveConfig();
     const githubToken = core.getInput("github-token");
+    const octokit = githubToken ? github.getOctokit(githubToken) : null;
     const commentOnFailure = core.getBooleanInput("comment-on-pr");
     const commentOnFirstRun = core.getBooleanInput("comment-on-pr-always");
     const commentOnEachRun = core.getBooleanInput("comment-on-pr-each-run");
@@ -329,6 +331,9 @@ export const runAction = async () => {
     });
     const resolvedReportPath = path.resolve(config.root, reportFileInput);
 
+    core.info(
+      `Overweight: processed ${result.results.length} entries (failures: ${result.stats.hasFailures})`
+    );
     core.summary.addHeading("🧳 Overweight Size Report");
     core.summary.addTable(toTableData(summaryRows));
     await core.summary.write();
@@ -345,6 +350,9 @@ export const runAction = async () => {
       const updateBaseline = core.getBooleanInput("update-baseline");
       const createBaselinePr = core.getBooleanInput("baseline-create-pr");
       const currentBranch = getBranchName();
+      core.info(
+        `Overweight: baseline path detected at ${baselinePath} (update=${updateBaseline}, createPR=${createBaselinePr})`
+      );
 
       if (updateBaseline) {
         if (createBaselinePr) {
@@ -353,13 +361,13 @@ export const runAction = async () => {
           } else {
             await writeBaseline(baselinePath, summaryRows);
             await createBaselinePullRequest({
+              octokit,
               baselinePath,
               baseBranch: targetBranch,
               title: core.getInput("baseline-pr-title") || "chore: update baseline report",
               body: core.getInput("baseline-pr-body") || "This PR refreshes the baseline report",
               branchPrefix: core.getInput("baseline-pr-branch-prefix") || "overweight/baseline",
               labels: core.getInput("baseline-pr-labels") || "",
-              token: githubToken
             });
             core.setOutput("baseline-updated", "true");
           }
@@ -375,19 +383,33 @@ export const runAction = async () => {
       }
     }
 
+    const existingComment =
+      octokit && prPayload ? await findExistingReportComment(octokit, prPayload) : null;
+
     const shouldCommentOnSuccess =
       prPayload &&
       (commentOnEachRun || (commentOnFirstRun && prAction === "opened"));
     const shouldCommentOnFailure = result.stats.hasFailures && commentOnFailure;
-    if (githubToken && (shouldCommentOnFailure || shouldCommentOnSuccess)) {
+    const shouldUpdateExisting =
+      Boolean(existingComment) && !result.stats.hasFailures && commentOnFailure;
+
+    if (octokit && (shouldCommentOnFailure || shouldCommentOnSuccess || shouldUpdateExisting)) {
       const statusText = result.stats.hasFailures ?
        "Overweight: Size check failed" :
        "Overweight: Size check passed";
 
-      await commentOnPullRequest(
-        githubToken,
-        `${statusText}:\n\n${htmlTable}`
+      core.info(
+        `Overweight: preparing PR comment (failure=${result.stats.hasFailures}, existingComment=${Boolean(
+          existingComment
+        )}, forceUpdate=${shouldUpdateExisting})`
       );
+
+      await commentOnPullRequest({
+        octokit,
+        pullRequest: prPayload,
+        body: `${statusText}:\n\n${htmlTable}`,
+        existingComment
+      });
     }
 
     if (result.stats.hasFailures) {
