@@ -196,6 +196,41 @@ describe("GitHub Action integration", () => {
     expect(setFailed).toHaveBeenCalledWith("One or more size checks failed.");
   });
 
+  it("updates existing comment when checks transition from fail to pass", async () => {
+    mockRunResult.stats.hasFailures = true;
+    inputs = {
+      "github-token": "token",
+      "comment-on-pr": "true"
+    };
+
+    await runAction();
+
+    expect(octokitMock.rest.issues.createComment).toHaveBeenCalledTimes(1);
+
+    octokitMock.rest.issues.listComments.mockResolvedValueOnce({
+      data: [
+        {
+          id: 123,
+          user: { type: "Bot" },
+          body: "<!-- overweight-report -->\nFailing report",
+          updated_at: new Date().toISOString()
+        }
+      ]
+    });
+
+    mockRunResult.stats.hasFailures = false;
+    inputs = {
+      "github-token": "token",
+      "comment-on-pr-always": "true"
+    };
+
+    await runAction();
+
+    expect(octokitMock.rest.issues.updateComment).toHaveBeenCalledTimes(1);
+    expect(octokitMock.rest.issues.updateComment.mock.calls[0][0].comment_id).toBe(123);
+    expect(octokitMock.rest.issues.updateComment.mock.calls[0][0].body).toContain("Size check passed");
+  });
+
   it("comments on first successful run when comment-on-pr-always is true", async () => {
     mockRunResult.stats.hasFailures = false;
     inputs = {

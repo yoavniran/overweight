@@ -235,6 +235,20 @@ const resolveConfig = async () => {
 
 const REPORT_MARKER = "<!-- overweight-report -->";
 
+const findExistingReportComment = async (octokit, pullRequest) => {
+  const { owner, repo } = github.context.repo;
+  const existingComments = await octokit.rest.issues.listComments({
+    owner,
+    repo,
+    issue_number: pullRequest.number,
+    per_page: 100
+  });
+
+  return existingComments.data
+    .filter((comment) => comment?.user?.type === "Bot" && comment?.body?.includes(REPORT_MARKER))
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+};
+
 const commentOnPullRequest = async (token, body) => {
   const pullRequest = github.context.payload.pull_request;
 
@@ -254,35 +268,22 @@ const commentOnPullRequest = async (token, body) => {
   }
 
   const octokit = github.getOctokit(token);
-  const { owner, repo } = github.context.repo;
-
-  const existingComments = await octokit.rest.issues.listComments({
-    owner,
-    repo,
-    issue_number: pullRequest.number,
-    per_page: 100
-  });
-
-  const previous = existingComments.data.find(
-    (comment) =>
-      comment?.user?.type === "Bot" &&
-      comment?.body?.includes(REPORT_MARKER)
-  );
+  const previous = await findExistingReportComment(octokit, pullRequest);
 
   const commentBody = `${REPORT_MARKER}\n${body}`;
 
   try {
     if (previous) {
       await octokit.rest.issues.updateComment({
-        owner,
-        repo,
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
         comment_id: previous.id,
         body: commentBody
       });
     } else {
       await octokit.rest.issues.createComment({
-        repo,
-        owner,
+        repo: github.context.repo.repo,
+        owner: github.context.repo.owner,
         issue_number: pullRequest.number,
         body: commentBody
       });
