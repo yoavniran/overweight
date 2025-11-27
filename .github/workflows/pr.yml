@@ -45,4 +45,5 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-pr: true
           update-baseline: true
+          baseline-create-pr: true
 
