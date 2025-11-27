@@ -2,9 +2,13 @@ name: release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - release-**
 
 jobs:
   release:
+    if: startsWith(github.ref, 'refs/heads/release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

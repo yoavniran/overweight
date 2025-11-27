@@ -21,7 +21,7 @@ pnpm add -D overweight
 
 Keep your configuration close to your code:
 
-- `overweight.json` at the project root (default when the CLI runs without args).
+- `overweight.json` (or `overweight.config.json`) at the project root (default when the CLI runs without args).
 - `package.json` → `overweight` field (array or object with a `files` property).
 - Any JSON file referenced via `overweight --config path/to/config.json`.
 
