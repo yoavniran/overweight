@@ -1,6 +1,11 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { consoleReporter } from "../src/reporters/console-reporter.js";
+import { jsonFileReporter } from "../src/reporters/json-file-reporter.js";
 import { jsonReporter } from "../src/reporters/json-reporter.js";
 import { silentReporter } from "../src/reporters/silent-reporter.js";
 import { getReporter } from "../src/reporters/index.js";
@@ -53,14 +58,20 @@ const failingResult = {
 describe("reporters", () => {
   let logSpy;
   let errorSpy;
+  let tempDir;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "overweight-reporters-"));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
+    if (tempDir) {
+      await fs.rm(tempDir, { recursive: true, force: true });
+      tempDir = null;
+    }
   });
 
   it("consoleReporter prints table and success summary", () => {
@@ -92,10 +103,19 @@ describe("reporters", () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
+  it("jsonFileReporter writes report to disk", async () => {
+    const target = path.join(tempDir, "report.json");
+    jsonFileReporter(passingResult, { reportFile: target, cwd: tempDir, silent: true });
+
+    const contents = await fs.readFile(target, "utf-8");
+    expect(JSON.parse(contents).stats).toEqual(passingResult.stats);
+  });
+
   it("getReporter resolves registered reporters", () => {
-    expect(getReporter()).toBe(consoleReporter);
-    expect(getReporter("json")).toBe(jsonReporter);
-    expect(getReporter("silent")).toBe(silentReporter);
+    expect(typeof getReporter()).toBe("function");
+    expect(typeof getReporter("json")).toBe("function");
+    expect(typeof getReporter("silent")).toBe("function");
+    expect(typeof getReporter("json-file", { reportFile: path.join(tempDir, "r.json") })).toBe("function");
   });
 
   it("getReporter throws for unknown reporter", () => {

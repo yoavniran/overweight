@@ -6,6 +6,7 @@ import github from "@actions/github";
 
 import { loadConfig, normalizeConfig } from "../config/load-config.js";
 import { runChecks } from "../core/run-checks.js";
+import { jsonFileReporter } from "../reporters/json-file-reporter.js";
 import { formatDiff } from "../utils/size.js";
 
 const statusEmoji = (row) => {
@@ -117,6 +118,91 @@ const renderHtmlTable = (rows) => {
   return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
 };
 
+const getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
+
+const ensureRelativePath = (absolutePath) => {
+  const workspaceRoot = getWorkspaceRoot();
+  const relative = path.relative(workspaceRoot, absolutePath);
+
+  if (relative.startsWith("..")) {
+    throw new Error(`Baseline path "${absolutePath}" is outside of the repository checkout (${workspaceRoot}).`);
+  }
+
+  return relative.replace(/\\/g, "/");
+};
+
+const sanitizeBranchName = (prefix) =>
+  `${prefix || "overweight/baseline"}`.replace(/\/+$/, "");
+
+const parseLabels = (labels) =>
+  labels
+    ?.split(",")
+    .map((label) => label.trim())
+    .filter(Boolean) ?? [];
+
+const createBaselinePullRequest = async ({
+  octokit,
+  baselinePath,
+  baseBranch,
+  title,
+  body,
+  branchPrefix,
+  labels
+}) => {
+  const { owner, repo } = github.context.repo;
+  const baseRef = await octokit.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${baseBranch}`
+  });
+
+  const branchName = `${sanitizeBranchName(branchPrefix)}/${new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
+
+  await octokit.git.createRef({
+    owner,
+    repo,
+    ref: `refs/heads/${branchName}`,
+    sha: baseRef.data.object.sha
+  });
+
+  const repoRelativePath = ensureRelativePath(baselinePath);
+  const fileContent = await fs.readFile(baselinePath, "utf-8");
+
+  await octokit.repos.createOrUpdateFileContents({
+    owner,
+    repo,
+    path: repoRelativePath,
+    message: title,
+    content: Buffer.from(fileContent, "utf-8").toString("base64"),
+    branch: branchName
+  });
+
+  const pr = await octokit.pulls.create({
+    owner,
+    repo,
+    head: branchName,
+    base: baseBranch,
+    title,
+    body
+  });
+
+  const parsedLabels = parseLabels(labels);
+  if (parsedLabels.length) {
+    await octokit.issues.addLabels({
+      owner,
+      repo,
+      issue_number: pr.data.number,
+      labels: parsedLabels
+    });
+  }
+
+  core.info(`Opened baseline update PR #${pr.data.number} (${pr.data.html_url})`);
+  core.setOutput("baseline-pr-number", String(pr.data.number));
+  core.setOutput("baseline-pr-url", pr.data.html_url);
+};
+
 const buildInlineConfig = (input) => {
   if (!input) {
     return null;
@@ -146,29 +232,88 @@ const resolveConfig = async () => {
   return loadConfig({ cwd, configPath: configInput || undefined });
 };
 
-const commentOnPullRequest = async (token, body) => {
-  const pullRequest = github.context.payload.pull_request;
+const REPORT_MARKER = "<!-- overweight-report -->";
 
+const findExistingReportComment = async (octokit, pullRequest) => {
+  const { owner, repo } = github.context.repo;
+  const existingComments = await octokit.rest.issues.listComments({
+    owner,
+    repo,
+    issue_number: pullRequest.number,
+    per_page: 100
+  });
+
+  const existing = existingComments.data
+    .filter((comment) => comment?.user?.type === "Bot" && comment?.body?.includes(REPORT_MARKER))
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+
+  return existing || null;
+};
+
+const commentOnPullRequest = async ({ octokit, pullRequest, body, existingComment }) => {
   if (!pullRequest) {
     core.info("No pull request found in the event payload; skipping comment.");
     return;
   }
 
-  const octokit = github.getOctokit(token);
-  await octokit.rest.issues.createComment({
-    repo: github.context.repo.repo,
-    owner: github.context.repo.owner,
-    issue_number: pullRequest.number,
-    body
-  });
+  const isFork =
+    pullRequest.head?.repo?.full_name &&
+    pullRequest.base?.repo?.full_name &&
+    pullRequest.head.repo.full_name !== pullRequest.base.repo.full_name;
+
+  if (isFork) {
+    core.info("Skipping pull request comment because the PR originates from a fork.");
+    return;
+  }
+
+  const previous =
+    existingComment !== undefined
+      ? existingComment
+      : await findExistingReportComment(octokit, pullRequest);
+
+  const commentBody = `${REPORT_MARKER}\n${body}`;
+
+  try {
+    if (previous) {
+      await octokit.rest.issues.updateComment({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        comment_id: previous.id,
+        body: commentBody
+      });
+    } else {
+      await octokit.rest.issues.createComment({
+        repo: github.context.repo.repo,
+        owner: github.context.repo.owner,
+        issue_number: pullRequest.number,
+        body: commentBody
+      });
+    }
+  } catch (error) {
+    if (error.status === 403) {
+      core.warning(
+        `Unable to comment on pull request due to permissions (403). Message: ${error.message}`
+      );
+      return;
+    }
+
+    throw error;
+  }
 };
 
 const getBranchName = () =>
   process.env.GITHUB_REF_NAME || process.env.GITHUB_REF?.split("/").pop() || "";
 
-const runAction = async () => {
+export const runAction = async () => {
   try {
     const config = await resolveConfig();
+    const githubToken = core.getInput("github-token");
+    const octokit = githubToken ? github.getOctokit(githubToken) : null;
+    const commentOnFailure = core.getBooleanInput("comment-on-pr");
+    const commentOnFirstRun = core.getBooleanInput("comment-on-pr-always");
+    const commentOnEachRun = core.getBooleanInput("comment-on-pr-each-run");
+    const prPayload = github.context.payload.pull_request;
+    const prAction = github.context.payload.action;
     const result = await runChecks(config);
     const baseRows = buildSummaryRows(result.results);
 
@@ -178,8 +323,18 @@ const runAction = async () => {
       : null;
     const baselineData = baselinePath ? await readBaseline(baselinePath) : null;
     const summaryRows = mergeWithBaseline(baseRows, baselineData);
+    const reportFileInput = core.getInput("report-file") || "overweight-report.json";
+    jsonFileReporter(result, {
+      reportFile: reportFileInput,
+      cwd: config.root,
+      silent: true
+    });
+    const resolvedReportPath = path.resolve(config.root, reportFileInput);
 
-    core.summary.addHeading("📦 Bundle Size Report");
+    core.info(
+      `Overweight: processed ${result.results.length} entries (failures: ${result.stats.hasFailures})`
+    );
+    core.summary.addHeading("🧳 Overweight Size Report");
     core.summary.addTable(toTableData(summaryRows));
     await core.summary.write();
 
@@ -188,36 +343,86 @@ const runAction = async () => {
     core.setOutput("report-json", JSON.stringify({ rows: summaryRows, stats: result.stats }));
     core.setOutput("report-table", htmlTable);
     core.setOutput("has-failures", String(result.stats.hasFailures));
+    core.setOutput("report-file", resolvedReportPath);
 
     if (baselinePath) {
       const targetBranch = core.getInput("baseline-branch") || "main";
       const updateBaseline = core.getBooleanInput("update-baseline");
+      const createBaselinePr = core.getBooleanInput("baseline-create-pr");
       const currentBranch = getBranchName();
+      core.info(
+        `Overweight: baseline path detected at ${baselinePath} (update=${updateBaseline}, createPR=${createBaselinePr})`
+      );
 
-      if (updateBaseline && currentBranch === targetBranch) {
-        await writeBaseline(baselinePath, summaryRows);
-        core.info(`Saved updated baseline report to ${baselinePath}`);
-        core.setOutput("baseline-updated", "true");
+      if (updateBaseline) {
+        if (createBaselinePr) {
+          if (!githubToken) {
+            core.setFailed("baseline-create-pr requires github-token to be set.");
+          } else {
+            await writeBaseline(baselinePath, summaryRows);
+            await createBaselinePullRequest({
+              octokit,
+              baselinePath,
+              baseBranch: targetBranch,
+              title: core.getInput("baseline-pr-title") || "chore: update baseline report",
+              body: core.getInput("baseline-pr-body") || "This PR refreshes the baseline report",
+              branchPrefix: core.getInput("baseline-pr-branch-prefix") || "overweight/baseline",
+              labels: core.getInput("baseline-pr-labels") || "",
+            });
+            core.setOutput("baseline-updated", "true");
+          }
+        } else if (currentBranch === targetBranch) {
+          await writeBaseline(baselinePath, summaryRows);
+          core.info(`Saved updated baseline report to ${baselinePath}`);
+          core.setOutput("baseline-updated", "true");
+        } else {
+          core.info(
+            `Skipping baseline update because current branch "${currentBranch}" does not match target branch "${targetBranch}". Enable baseline-create-pr to open a pull request automatically.`
+          );
+        }
       }
     }
 
-    const githubToken = core.getInput("github-token");
-    const shouldComment = core.getBooleanInput("comment-on-pr");
+    const existingComment =
+      octokit && prPayload ? await findExistingReportComment(octokit, prPayload) : null;
 
-    if (githubToken && shouldComment && result.stats.hasFailures) {
-      await commentOnPullRequest(
-        githubToken,
-        `Bundle size check failed:\n\n${htmlTable}`
+    const shouldCommentOnSuccess =
+      prPayload &&
+      (commentOnEachRun || (commentOnFirstRun && prAction === "opened"));
+    const shouldCommentOnFailure = result.stats.hasFailures && commentOnFailure;
+    const shouldUpdateExisting =
+      Boolean(existingComment) && !result.stats.hasFailures && commentOnFailure;
+
+    if (octokit && (shouldCommentOnFailure || shouldCommentOnSuccess || shouldUpdateExisting)) {
+      const statusText = result.stats.hasFailures ?
+       "Overweight: Size check failed" :
+       "Overweight: Size check passed";
+
+      core.info(
+        `Overweight: preparing PR comment (failure=${result.stats.hasFailures}, existingComment=${Boolean(
+          existingComment
+        )}, forceUpdate=${shouldUpdateExisting})`
       );
+
+      await commentOnPullRequest({
+        octokit,
+        pullRequest: prPayload,
+        body: `${statusText}:\n\n${htmlTable}`,
+        existingComment
+      });
     }
 
     if (result.stats.hasFailures) {
-      core.setFailed("One or more bundle size checks failed.");
+      core.setFailed("One or more size checks failed.");
     }
   } catch (error) {
     core.setFailed(error.message);
   }
 };
 
-runAction();
+export default runAction;
+
+if (process.env.NODE_ENV !== "test") {
+  runAction();
+}
 

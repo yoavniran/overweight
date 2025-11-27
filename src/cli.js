@@ -13,8 +13,9 @@ const cli = cac("overweight");
 cli
   .option("--config <path>", "Path to an overweight configuration file.")
   .option("--root <path>", "Working directory for resolving files and globs.")
-  .option("--reporter <name>", "Reporter to use (console, json, silent).")
+  .option("--reporter <name>", "Reporter to use (console, json, json-file, silent).")
   .option("--json", "Shortcut for --reporter=json.")
+  .option("--report-file <path>", "Target path for the json-file reporter output.")
   .option("--files <json>", "Inline JSON array of file rules (overrides config file).")
   .option("-f, --file <pattern>", "Quick check for a single file/glob.")
   .option("-s, --max-size <size>", "Max size value for --file usage.")
@@ -53,8 +54,7 @@ const parseInlineFiles = (value) => {
   }
 };
 
-const resolveConfig = async (options) => {
-  const root = options.root ? path.resolve(process.cwd(), options.root) : process.cwd();
+const resolveConfig = async (options, root) => {
   const inlineConfig = options.files ? parseInlineFiles(options.files) : buildSingleRule(options);
 
   if (inlineConfig) {
@@ -67,9 +67,13 @@ const resolveConfig = async (options) => {
 const main = async () => {
   try {
     const { options } = cli.parse();
+    const root = options.root ? path.resolve(process.cwd(), options.root) : process.cwd();
     const reporterName = options.json ? "json" : options.reporter;
-    const reporter = getReporter(reporterName || "console");
-    const config = await resolveConfig(options);
+    const config = await resolveConfig(options, root);
+    const reporter = getReporter(reporterName || "console", {
+      reportFile: options.reportFile,
+      cwd: root
+    });
     const result = await runChecks(config);
 
     reporter(result);

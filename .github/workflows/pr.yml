@@ -7,6 +7,10 @@ on:
         branches:
             - main
 
+permissions:
+  contents: read
+  pull-requests: write
+  
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -41,4 +45,5 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-pr: true
           update-baseline: true
+          baseline-create-pr: true
 

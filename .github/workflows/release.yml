@@ -1,10 +1,17 @@
-name: release
+name: Overweight Release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - release-**
+
 
 jobs:
+
   release:
+    environment: "release"
+    if: startsWith(github.ref, 'refs/heads/release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
