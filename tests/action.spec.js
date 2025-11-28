@@ -76,7 +76,8 @@ const octokitMock = vi.hoisted(() => {
     rest: {
       issues: issuesApi,
       repos: reposApi,
-      pulls: pullsApi
+      pulls: pullsApi,
+      git: gitApi
     },
     issues: issuesApi,
     repos: reposApi,

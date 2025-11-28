@@ -150,7 +150,7 @@ const createBaselinePullRequest = async ({
   labels
 }) => {
   const { owner, repo } = github.context.repo;
-  const baseRef = await octokit.git.getRef({
+  const baseRef = await octokit.rest.git.getRef({
     owner,
     repo,
     ref: `heads/${baseBranch}`
@@ -160,7 +160,7 @@ const createBaselinePullRequest = async ({
     .toISOString()
     .replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
 
-  await octokit.git.createRef({
+  await octokit.rest.git.createRef({
     owner,
     repo,
     ref: `refs/heads/${branchName}`,
@@ -170,7 +170,7 @@ const createBaselinePullRequest = async ({
   const repoRelativePath = ensureRelativePath(baselinePath);
   const fileContent = await fs.readFile(baselinePath, "utf-8");
 
-  await octokit.repos.createOrUpdateFileContents({
+  await octokit.rest.repos.createOrUpdateFileContents({
     owner,
     repo,
     path: repoRelativePath,
@@ -179,7 +179,7 @@ const createBaselinePullRequest = async ({
     branch: branchName
   });
 
-  const pr = await octokit.pulls.create({
+  const pr = await octokit.rest.pulls.create({
     owner,
     repo,
     head: branchName,
@@ -190,7 +190,7 @@ const createBaselinePullRequest = async ({
 
   const parsedLabels = parseLabels(labels);
   if (parsedLabels.length) {
-    await octokit.issues.addLabels({
+    await octokit.rest.issues.addLabels({
       owner,
       repo,
       issue_number: pr.data.number,
