@@ -1,4 +1,4 @@
-name: "Overweight"
+name: "Overweight-Guard"
 description: "Extensible bundle size guard with pluggable testers."
 author: "Yoav Niran"
 inputs:
@@ -79,6 +79,6 @@ runs:
   using: "node20"
   main: "dist/action/index.js"
 branding:
-  color: "blue"
-  icon: "shield"
+  color: "orange"
+  icon: "briefcase"
 
