@@ -253,7 +253,7 @@ describe("GitHub Action integration", () => {
     mockRunResult.stats.hasFailures = false;
     inputs = {
       "github-token": "token",
-      "baseline-path": "baseline.json",
+      "baseline-report-path": "baseline.json",
       "update-baseline": "true",
       "baseline-create-pr": "true",
       "baseline-branch": "main",
@@ -278,6 +278,29 @@ describe("GitHub Action integration", () => {
       expect.objectContaining({ title: "chore: update baseline" })
     );
     expect(setOutput).toHaveBeenCalledWith("baseline-pr-url", "https://example.com/pr/15");
+  });
+
+  it("defaults baseline-report-path to report-file when updating baseline without explicit path", async () => {
+    mockRunResult.stats.hasFailures = false;
+    inputs = {
+      "github-token": "token",
+      "report-file": "custom-baseline.json",
+      "update-baseline": "true",
+      "baseline-create-pr": "true"
+    };
+    githubContext.payload = { action: "push" };
+    fsMock.readFile.mockResolvedValueOnce("[]");
+    fsMock.readFile.mockResolvedValueOnce("[]");
+
+    await runAction();
+
+    expect(fsMock.writeFile).toHaveBeenCalledWith(
+      "/repo/custom-baseline.json",
+      expect.any(String)
+    );
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "custom-baseline.json" })
+    );
   });
 });
 

@@ -26,8 +26,8 @@ inputs:
     description: "Comment on every PR run regardless of the result."
     required: false
     default: "false"
-  baseline-path:
-    description: "Optional path to a JSON file with baseline results."
+  baseline-report-path:
+    description: "Optional path to a JSON file with baseline results. Defaults to `report-file` when omitted and `update-baseline` is true."
     required: false
   baseline-branch:
     description: "Branch name that acts as the baseline when updating reports."

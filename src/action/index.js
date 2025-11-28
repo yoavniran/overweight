@@ -317,13 +317,24 @@ export const runAction = async () => {
     const result = await runChecks(config);
     const baseRows = buildSummaryRows(result.results);
 
-    const baselinePathInput = core.getInput("baseline-path");
-    const baselinePath = baselinePathInput
-      ? path.resolve(config.root, baselinePathInput)
+    const reportFileInput = core.getInput("report-file") || "overweight-report.json";
+    const updateBaseline = core.getBooleanInput("update-baseline");
+    const baselineReportPathInput = core.getInput("baseline-report-path");
+    const shouldDefaultBaselinePath =
+      !baselineReportPathInput && updateBaseline && Boolean(reportFileInput);
+    const baselinePathCandidate = baselineReportPathInput || (shouldDefaultBaselinePath ? reportFileInput : null);
+
+    if (shouldDefaultBaselinePath) {
+      core.info(
+        `Overweight: baseline-report-path not provided, defaulting to report-file "${reportFileInput}".`
+      );
+    }
+
+    const baselinePath = baselinePathCandidate
+      ? path.resolve(config.root, baselinePathCandidate)
       : null;
     const baselineData = baselinePath ? await readBaseline(baselinePath) : null;
     const summaryRows = mergeWithBaseline(baseRows, baselineData);
-    const reportFileInput = core.getInput("report-file") || "overweight-report.json";
     jsonFileReporter(result, {
       reportFile: reportFileInput,
       cwd: config.root,
@@ -347,7 +358,6 @@ export const runAction = async () => {
 
     if (baselinePath) {
       const targetBranch = core.getInput("baseline-branch") || "main";
-      const updateBaseline = core.getBooleanInput("update-baseline");
       const createBaselinePr = core.getBooleanInput("baseline-create-pr");
       const currentBranch = getBranchName();
       core.info(
