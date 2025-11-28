@@ -8,4 +8,6 @@ keep messages terse and technical with short sentences only
 keep the first line of the commit message (header) shorter than 100 chars to avoid the commitlint check: header "must not be longer than 100 characters, current length is 105 [header-max-length]".
 If needed, use line break after the header and a short message with some details after that
 
+Also adhere to: body's lines must not be longer than 100 characters [body-max-line-length]
+
 always choose a conventional commit verb that will map to either major or minor or patch. unless somehow the commit doesnt contain anything that is relevant to the outside (code change or docs change), each commit should translate to a new version 
