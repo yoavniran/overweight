@@ -499,7 +499,6 @@ describe("GitHub Action integration", () => {
       "baseline-report-path": "baseline.json",
       "update-baseline": "true"
     };
-    const resultRow = mockRunResult.results[0];
     const snapshot = buildSnapshotFromResults();
     fsMock.readFile.mockResolvedValueOnce(snapshot);
     fsMock.readFile.mockResolvedValueOnce(snapshot);
@@ -510,6 +509,39 @@ describe("GitHub Action integration", () => {
     expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
     expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
     expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("detects PR number when workflow_dispatch runs on a branch with an open PR", async () => {
+    mockRunResult.stats.hasFailures = false;
+    githubContext.payload = {
+      action: "workflow_dispatch",
+      ref: "refs/heads/feature/manual"
+    };
+    process.env.GITHUB_REF_NAME = "feature/manual";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    octokitMock.rest.pulls.list
+      .mockResolvedValueOnce({ data: [{ number: 88, html_url: "https://example.com/pr/88" }] })
+      .mockResolvedValueOnce({ data: [{ number: 90, html_url: "https://example.com/pr/90" }] });
+    octokitMock.rest.git.getRef.mockResolvedValue({ data: { object: { sha: "abc123" } } });
+    octokitMock.rest.repos.getContent.mockResolvedValueOnce({
+      data: { type: "file", sha: "baseline-sha" }
+    });
+
+    await runAction();
+
+    expect(octokitMock.rest.git.createRef).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: "overweight/baseline/pr-88", sha: "baseline-sha" })
+    );
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+    expect(setOutput).toHaveBeenCalledWith("baseline-update-pr-number", "90");
+    expect(setOutput).toHaveBeenCalledWith("baseline-update-pr-url", "https://example.com/pr/90");
   });
 
   afterAll(() => {

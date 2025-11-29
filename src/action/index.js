@@ -268,6 +268,24 @@ const findExistingBaselinePr = async ({ octokit, branchName }) => {
   return prs.data?.[0] || null;
 };
 
+const findPrNumberForBranch = async ({ octokit, branch }) => {
+  if (!branch) {
+    return null;
+  }
+
+  const { owner, repo } = github.context.repo;
+  const prs = await octokit.rest.pulls.list({
+    owner,
+    repo,
+    head: `${owner}:${branch}`,
+    state: "open",
+    per_page: 1
+  });
+
+  const pr = prs.data?.[0];
+  return pr?.number ?? null;
+};
+
 const resolveConfig = async () => {
   const configInput = core.getInput("config");
   const filesInput = core.getInput("files");
@@ -408,8 +426,7 @@ export const runAction = async () => {
     if (baselinePath) {
       if (result.stats.hasFailures) {
         core.info("Skipping baseline update because size checks failed.");
-      } else
-      if (!updateBaseline) {
+      } else if (!updateBaseline) {
         core.info("update-baseline=false, skipping baseline write.");
       } else if (!githubToken || !octokit) {
         core.setFailed("update-baseline requires github-token to be provided.");
@@ -430,7 +447,23 @@ export const runAction = async () => {
             core.getInput("update-pr-body") ||
             "Automatic pull request updating the baseline report.";
           const branchPrefix = core.getInput("update-branch-prefix") || "overweight/baseline";
-          const prIdentifier = github.context.payload.pull_request?.number ?? null;
+          let prIdentifier = github.context.payload.pull_request?.number ?? null;
+
+          if (!prIdentifier) {
+            try {
+              prIdentifier = await findPrNumberForBranch({ octokit, branch: currentBranch });
+              if (prIdentifier) {
+                core.info(
+                  `Detected existing pull request #${prIdentifier} for branch ${currentBranch}.`
+                );
+              }
+            } catch (error) {
+              core.warning(
+                `Unable to infer pull request number for branch ${currentBranch}: ${error.message}`
+              );
+            }
+          }
+
           const updateBranchName = buildUpdateBranchName({
             prefix: branchPrefix,
             prNumber: prIdentifier,
