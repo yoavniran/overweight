@@ -28,6 +28,8 @@ inputs:
     default: "false"
   baseline-report-path:
     description: "Optional path to a JSON file with baseline results. Defaults to `report-file` when omitted and `update-baseline` is true."
+  baseline-report-path:
+    description: "Optional path to a JSON file with baseline results. Defaults to `report-file` when omitted and `update-baseline` is true."
     required: false
   update-baseline:
     description: "When true, commit the updated baseline to a new branch and open a pull request."
@@ -67,7 +69,7 @@ outputs:
   baseline-update-pr-url:
     description: "URL of the pull request created for the baseline update."
   baseline-update-pr-number:
-    description: "Number of the pull request created for the baseline update."
+    description: "Number of the pull request created for the baseline update."  
 runs:
   using: "node20"
   main: "dist/action/index.js"

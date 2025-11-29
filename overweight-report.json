@@ -1,0 +1,29 @@
+[
+  {
+    "label": "dist-action",
+    "file": "dist/action/index.js",
+    "tester": "raw",
+    "size": "27.8 kB",
+    "sizeBytes": 27823,
+    "limit": "30 kB",
+    "limitBytes": 30000
+  },
+  {
+    "label": "dist-cli",
+    "file": "dist/cli.js",
+    "tester": "brotli",
+    "size": "4.36 kB",
+    "sizeBytes": 4355,
+    "limit": "6 kB",
+    "limitBytes": 6000
+  },
+  {
+    "label": "dist-index",
+    "file": "dist/index.js",
+    "tester": "gzip",
+    "size": "3.35 kB",
+    "sizeBytes": 3354,
+    "limit": "5 kB",
+    "limitBytes": 5000
+  }
+]
