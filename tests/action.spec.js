@@ -315,7 +315,6 @@ describe("GitHub Action integration", () => {
       "update-branch-prefix": "overweight/test"
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     octokitMock.rest.git.getRef
       .mockRejectedValueOnce(createNotFoundError())
       .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
@@ -363,7 +362,6 @@ describe("GitHub Action integration", () => {
       "update-baseline": "true"
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     octokitMock.rest.git.getRef
       .mockRejectedValueOnce(createNotFoundError())
       .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
@@ -408,7 +406,6 @@ describe("GitHub Action integration", () => {
       2
     );
     fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
-    fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
     octokitMock.rest.git.getRef
       .mockRejectedValueOnce(createNotFoundError())
       .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
@@ -429,7 +426,6 @@ describe("GitHub Action integration", () => {
       "update-baseline": "true"
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     octokitMock.rest.git.getRef
       .mockRejectedValueOnce(createNotFoundError())
       .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
@@ -449,7 +445,6 @@ describe("GitHub Action integration", () => {
       "update-baseline": "false"
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
 
     await runAction();
 
@@ -465,7 +460,6 @@ describe("GitHub Action integration", () => {
       "baseline-report-path": "baseline.json",
       "update-baseline": "true"
     };
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
 
     await runAction();
@@ -485,7 +479,6 @@ describe("GitHub Action integration", () => {
       "baseline-protected-branches": "main,release-*"
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
 
     await runAction();
 
@@ -500,7 +493,6 @@ describe("GitHub Action integration", () => {
       "baseline-report-path": "baseline.json",
       "update-baseline": "true"
     };
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
 
     await runAction();
@@ -520,7 +512,6 @@ describe("GitHub Action integration", () => {
       "update-baseline": "true"
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
 
     await runAction();
 
@@ -538,7 +529,6 @@ describe("GitHub Action integration", () => {
       "baseline-report-path": "baseline.json",
       "update-baseline": "true"
     };
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     octokitMock.rest.repos.getContent.mockResolvedValueOnce({
       data: { type: "file", sha: "existing-sha" }
@@ -568,11 +558,30 @@ describe("GitHub Action integration", () => {
     };
     const snapshot = buildSnapshotFromResults();
     fsMock.readFile.mockResolvedValueOnce(snapshot);
-    fsMock.readFile.mockResolvedValueOnce(snapshot);
 
     await runAction();
 
     expect(octokitMock.rest.git.createRef).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("skips baseline update when baseline path defaults to report-file and nothing changed", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/shared-report";
+    inputs = {
+      "github-token": "token",
+      "report-file": "shared-report.json",
+      "update-baseline": "true"
+    };
+    const snapshot = buildSnapshotFromResults();
+    fsMock.readFile.mockResolvedValueOnce(snapshot);
+    fsMock.readFile.mockResolvedValueOnce("should-not-be-read");
+
+    await runAction();
+
+    expect(fsMock.readFile).toHaveBeenCalledTimes(1);
     expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
     expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
     expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
@@ -590,7 +599,6 @@ describe("GitHub Action integration", () => {
       "baseline-report-path": "baseline.json",
       "update-baseline": "true"
     };
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     octokitMock.rest.pulls.list
       .mockResolvedValueOnce({ data: [{ number: 88, html_url: "https://example.com/pr/88" }] })
