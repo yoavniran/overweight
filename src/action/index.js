@@ -159,6 +159,32 @@ const buildInlineConfig = (input) => {
 const resolveWorkingDirectory = (input) =>
   input ? path.resolve(process.cwd(), input) : process.cwd();
 
+const DEFAULT_PROTECTED_BRANCHES = ["main", "master"];
+
+const parseProtectedBranchPatterns = (input) => {
+  const raw = input && input.trim().length ? input : DEFAULT_PROTECTED_BRANCHES.join(",");
+
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const patternToRegex = (pattern) =>
+  new RegExp(`^${pattern.split("*").map((segment) => escapeRegex(segment)).join(".*")}$`);
+
+const branchMatchesPattern = (branch, pattern) => {
+  if (!pattern || !branch) {
+    return false;
+  }
+
+  return patternToRegex(pattern).test(branch);
+};
+
+const isBranchProtected = (branch, patterns) =>
+  Boolean(branch) && patterns.some((pattern) => branchMatchesPattern(branch, pattern));
+
 const getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
 
 const ensureRelativePath = (absolutePath) => {
@@ -433,11 +459,20 @@ export const runAction = async () => {
       } else {
         const { needsUpdate, content } = await getBaselineUpdateInfo(baselinePath, summaryRows);
         const currentBranch = getBranchName() || "unknown";
+        const protectedPatterns = parseProtectedBranchPatterns(
+          core.getInput("baseline-protected-branches")
+        );
+        const branchIsProtected = isBranchProtected(currentBranch, protectedPatterns);
+
         core.info(
           `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate})`
         );
 
-        if (!needsUpdate) {
+        if (branchIsProtected) {
+          core.info(
+            `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
+          );
+        } else if (!needsUpdate) {
           core.info("Baseline is already up to date; no changes written.");
         } else {
           const baseBranch = resolveBaseBranch();
@@ -471,19 +506,17 @@ export const runAction = async () => {
           });
           const repoRelativePath = ensureRelativePath(baselinePath);
 
-          const branchExisted = await ensureUpdateBranchExists({
+          await ensureUpdateBranchExists({
             octokit,
             branchName: updateBranchName,
             baseBranch
           });
 
-          const existingFileSha = branchExisted
-            ? await getExistingFileSha({
-                octokit,
-                branchName: updateBranchName,
-                path: repoRelativePath
-              })
-            : undefined;
+          const existingFileSha = await getExistingFileSha({
+            octokit,
+            branchName: updateBranchName,
+            path: repoRelativePath
+          });
 
           await writeBaseline(baselinePath, summaryRows, content);
           core.info(`Wrote updated baseline snapshot to ${baselinePath}`);
