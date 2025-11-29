@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { Buffer } from "node:buffer";
 
 import core from "@actions/core";
 import github from "@actions/github";
@@ -8,6 +9,11 @@ import { loadConfig, normalizeConfig } from "../config/load-config.js";
 import { runChecks } from "../core/run-checks.js";
 import { jsonFileReporter } from "../reporters/json-file-reporter.js";
 import { formatDiff } from "../utils/size.js";
+
+const BOT_COMMIT_IDENTITY = {
+  name: "Overweight Bot",
+  email: "ci-bot@overweight-gh-action.com"
+};
 
 const statusEmoji = (row) => {
   if (row.error) {
@@ -41,9 +47,8 @@ const readBaseline = async (baselinePath) => {
   }
 };
 
-const writeBaseline = async (baselinePath, rows) => {
-  await fs.mkdir(path.dirname(baselinePath), { recursive: true });
-  const sorted = [...rows]
+const buildBaselineSnapshot = (rows) =>
+  [...rows]
     .map((row) => ({
       label: row.label,
       file: row.file,
@@ -55,7 +60,27 @@ const writeBaseline = async (baselinePath, rows) => {
     }))
     .sort((a, b) => a.file.localeCompare(b.file));
 
-  await fs.writeFile(baselinePath, JSON.stringify(sorted, null, 2));
+const serializeBaselineSnapshot = (rows) => JSON.stringify(buildBaselineSnapshot(rows), null, 2);
+
+const writeBaseline = async (baselinePath, rows, precomputedContent) => {
+  await fs.mkdir(path.dirname(baselinePath), { recursive: true });
+  const content = precomputedContent ?? serializeBaselineSnapshot(rows);
+  await fs.writeFile(baselinePath, content);
+};
+
+const getBaselineUpdateInfo = async (baselinePath, rows) => {
+  const nextContent = serializeBaselineSnapshot(rows);
+
+  try {
+    const currentContent = await fs.readFile(baselinePath, "utf-8");
+    return { needsUpdate: currentContent !== nextContent, content: nextContent };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return { needsUpdate: true, content: nextContent };
+    }
+
+    throw error;
+  }
 };
 
 const mergeWithBaseline = (rows, baseline) => {
@@ -118,91 +143,6 @@ const renderHtmlTable = (rows) => {
   return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
 };
 
-const getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
-
-const ensureRelativePath = (absolutePath) => {
-  const workspaceRoot = getWorkspaceRoot();
-  const relative = path.relative(workspaceRoot, absolutePath);
-
-  if (relative.startsWith("..")) {
-    throw new Error(`Baseline path "${absolutePath}" is outside of the repository checkout (${workspaceRoot}).`);
-  }
-
-  return relative.replace(/\\/g, "/");
-};
-
-const sanitizeBranchName = (prefix) =>
-  `${prefix || "overweight/baseline"}`.replace(/\/+$/, "");
-
-const parseLabels = (labels) =>
-  labels
-    ?.split(",")
-    .map((label) => label.trim())
-    .filter(Boolean) ?? [];
-
-const createBaselinePullRequest = async ({
-  octokit,
-  baselinePath,
-  baseBranch,
-  title,
-  body,
-  branchPrefix,
-  labels
-}) => {
-  const { owner, repo } = github.context.repo;
-  const baseRef = await octokit.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${baseBranch}`
-  });
-
-  const branchName = `${sanitizeBranchName(branchPrefix)}/${new Date()
-    .toISOString()
-    .replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
-
-  await octokit.git.createRef({
-    owner,
-    repo,
-    ref: `refs/heads/${branchName}`,
-    sha: baseRef.data.object.sha
-  });
-
-  const repoRelativePath = ensureRelativePath(baselinePath);
-  const fileContent = await fs.readFile(baselinePath, "utf-8");
-
-  await octokit.repos.createOrUpdateFileContents({
-    owner,
-    repo,
-    path: repoRelativePath,
-    message: title,
-    content: Buffer.from(fileContent, "utf-8").toString("base64"),
-    branch: branchName
-  });
-
-  const pr = await octokit.pulls.create({
-    owner,
-    repo,
-    head: branchName,
-    base: baseBranch,
-    title,
-    body
-  });
-
-  const parsedLabels = parseLabels(labels);
-  if (parsedLabels.length) {
-    await octokit.issues.addLabels({
-      owner,
-      repo,
-      issue_number: pr.data.number,
-      labels: parsedLabels
-    });
-  }
-
-  core.info(`Opened baseline update PR #${pr.data.number} (${pr.data.html_url})`);
-  core.setOutput("baseline-pr-number", String(pr.data.number));
-  core.setOutput("baseline-pr-url", pr.data.html_url);
-};
-
 const buildInlineConfig = (input) => {
   if (!input) {
     return null;
@@ -218,6 +158,133 @@ const buildInlineConfig = (input) => {
 
 const resolveWorkingDirectory = (input) =>
   input ? path.resolve(process.cwd(), input) : process.cwd();
+
+const getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
+
+const ensureRelativePath = (absolutePath) => {
+  const workspaceRoot = getWorkspaceRoot();
+  const relative = path.relative(workspaceRoot, absolutePath);
+
+  if (relative.startsWith("..")) {
+    throw new Error(
+      `Baseline path "${absolutePath}" is outside of the repository checkout (${workspaceRoot}).`
+    );
+  }
+
+  return relative.replace(/\\/g, "/");
+};
+
+const sanitizeBranchPrefix = (prefix) =>
+  `${prefix || "overweight/baseline"}`.replace(/\/+$/, "");
+
+const sanitizeBranchSuffix = (suffix) =>
+  suffix ? suffix.replace(/[^0-9A-Za-z._-]+/g, "-") : "";
+
+const buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
+  const suffix =
+    prNumber != null
+      ? `pr-${prNumber}`
+      : sanitizeBranchSuffix(currentBranch) || `run-${github.context.runId || Date.now()}`;
+
+  return `${sanitizeBranchPrefix(prefix)}/${suffix}`;
+};
+
+const resolveBaseBranch = () =>
+  github.context.payload.pull_request?.base?.ref ||
+  process.env.GITHUB_REF_NAME ||
+  process.env.GITHUB_REF?.split("/").pop() ||
+  "main";
+
+const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
+  const { owner, repo } = github.context.repo;
+
+  try {
+    await octokit.rest.git.getRef({
+      owner,
+      repo,
+      ref: `heads/${branchName}`
+    });
+    return true;
+  } catch (error) {
+    if (error.status !== 404) {
+      throw error;
+    }
+  }
+
+  const baseRef = await octokit.rest.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${baseBranch}`
+  });
+
+  const baseSha = baseRef.data.object?.sha || baseRef.data.sha;
+
+  await octokit.rest.git.createRef({
+    owner,
+    repo,
+    ref: `refs/heads/${branchName}`,
+    sha: baseSha
+  });
+
+  return false;
+};
+
+const getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
+  const { owner, repo } = github.context.repo;
+
+  try {
+    const response = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: repoPath,
+      ref: branchName
+    });
+
+    if (!Array.isArray(response.data) && response.data.type === "file") {
+      return response.data.sha;
+    }
+
+    return undefined;
+  } catch (error) {
+    if (error.status === 404) {
+      return undefined;
+    }
+
+    throw error;
+  }
+};
+
+const findExistingBaselinePr = async ({ octokit, branchName }) => {
+  const { owner, repo } = github.context.repo;
+
+  const prs = await octokit.rest.pulls.list({
+    owner,
+    repo,
+    head: `${owner}:${branchName}`,
+    state: "open",
+    per_page: 1
+  });
+
+  return prs.data?.[0] || null;
+};
+
+const findPrNumberForBranch = async ({ octokit, branch }) => {
+  if (!branch) {
+    return null;
+  }
+
+  const { owner, repo } = github.context.repo;
+  const prs = await octokit.rest.pulls.list({
+    owner,
+    repo,
+    head: `${owner}:${branch}`,
+    state: "open",
+    per_page: 1
+  });
+
+  const pr = prs.data?.[0];
+  return pr?.number ?? null;
+};
 
 const resolveConfig = async () => {
   const configInput = core.getInput("config");
@@ -317,13 +384,24 @@ export const runAction = async () => {
     const result = await runChecks(config);
     const baseRows = buildSummaryRows(result.results);
 
-    const baselinePathInput = core.getInput("baseline-path");
-    const baselinePath = baselinePathInput
-      ? path.resolve(config.root, baselinePathInput)
+    const reportFileInput = core.getInput("report-file") || "overweight-report.json";
+    const updateBaseline = core.getBooleanInput("update-baseline");
+    const baselineReportPathInput = core.getInput("baseline-report-path");
+    const shouldDefaultBaselinePath =
+      !baselineReportPathInput && updateBaseline && Boolean(reportFileInput);
+    const baselinePathCandidate = baselineReportPathInput || (shouldDefaultBaselinePath ? reportFileInput : null);
+
+    if (shouldDefaultBaselinePath) {
+      core.info(
+        `Overweight: baseline-report-path not provided, defaulting to report-file "${reportFileInput}".`
+      );
+    }
+
+    const baselinePath = baselinePathCandidate
+      ? path.resolve(config.root, baselinePathCandidate)
       : null;
     const baselineData = baselinePath ? await readBaseline(baselinePath) : null;
     const summaryRows = mergeWithBaseline(baseRows, baselineData);
-    const reportFileInput = core.getInput("report-file") || "overweight-report.json";
     jsonFileReporter(result, {
       reportFile: reportFileInput,
       cwd: config.root,
@@ -346,39 +424,105 @@ export const runAction = async () => {
     core.setOutput("report-file", resolvedReportPath);
 
     if (baselinePath) {
-      const targetBranch = core.getInput("baseline-branch") || "main";
-      const updateBaseline = core.getBooleanInput("update-baseline");
-      const createBaselinePr = core.getBooleanInput("baseline-create-pr");
-      const currentBranch = getBranchName();
-      core.info(
-        `Overweight: baseline path detected at ${baselinePath} (update=${updateBaseline}, createPR=${createBaselinePr})`
-      );
+      if (result.stats.hasFailures) {
+        core.info("Skipping baseline update because size checks failed.");
+      } else if (!updateBaseline) {
+        core.info("update-baseline=false, skipping baseline write.");
+      } else if (!githubToken || !octokit) {
+        core.setFailed("update-baseline requires github-token to be provided.");
+      } else {
+        const { needsUpdate, content } = await getBaselineUpdateInfo(baselinePath, summaryRows);
+        const currentBranch = getBranchName() || "unknown";
+        core.info(
+          `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate})`
+        );
 
-      if (updateBaseline) {
-        if (createBaselinePr) {
-          if (!githubToken) {
-            core.setFailed("baseline-create-pr requires github-token to be set.");
-          } else {
-            await writeBaseline(baselinePath, summaryRows);
-            await createBaselinePullRequest({
-              octokit,
-              baselinePath,
-              baseBranch: targetBranch,
-              title: core.getInput("baseline-pr-title") || "chore: update baseline report",
-              body: core.getInput("baseline-pr-body") || "This PR refreshes the baseline report",
-              branchPrefix: core.getInput("baseline-pr-branch-prefix") || "overweight/baseline",
-              labels: core.getInput("baseline-pr-labels") || "",
-            });
-            core.setOutput("baseline-updated", "true");
-          }
-        } else if (currentBranch === targetBranch) {
-          await writeBaseline(baselinePath, summaryRows);
-          core.info(`Saved updated baseline report to ${baselinePath}`);
-          core.setOutput("baseline-updated", "true");
+        if (!needsUpdate) {
+          core.info("Baseline is already up to date; no changes written.");
         } else {
-          core.info(
-            `Skipping baseline update because current branch "${currentBranch}" does not match target branch "${targetBranch}". Enable baseline-create-pr to open a pull request automatically.`
-          );
+          const baseBranch = resolveBaseBranch();
+          const prTitleInput = core.getInput("update-pr-title") || "chore: update baseline report";
+          const prTitle = `${prTitleInput} (🧳 Overweight Guard)`;
+          const prBody =
+            core.getInput("update-pr-body") ||
+            "Automatic pull request updating the baseline report.";
+          const branchPrefix = core.getInput("update-branch-prefix") || "overweight/baseline";
+          let prIdentifier = github.context.payload.pull_request?.number ?? null;
+
+          if (!prIdentifier) {
+            try {
+              prIdentifier = await findPrNumberForBranch({ octokit, branch: currentBranch });
+              if (prIdentifier) {
+                core.info(
+                  `Detected existing pull request #${prIdentifier} for branch ${currentBranch}.`
+                );
+              }
+            } catch (error) {
+              core.warning(
+                `Unable to infer pull request number for branch ${currentBranch}: ${error.message}`
+              );
+            }
+          }
+
+          const updateBranchName = buildUpdateBranchName({
+            prefix: branchPrefix,
+            prNumber: prIdentifier,
+            currentBranch
+          });
+          const repoRelativePath = ensureRelativePath(baselinePath);
+
+          const branchExisted = await ensureUpdateBranchExists({
+            octokit,
+            branchName: updateBranchName,
+            baseBranch
+          });
+
+          const existingFileSha = branchExisted
+            ? await getExistingFileSha({
+                octokit,
+                branchName: updateBranchName,
+                path: repoRelativePath
+              })
+            : undefined;
+
+          await writeBaseline(baselinePath, summaryRows, content);
+          core.info(`Wrote updated baseline snapshot to ${baselinePath}`);
+
+          await octokit.rest.repos.createOrUpdateFileContents({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            path: repoRelativePath,
+            message: prTitle,
+            content: Buffer.from(content, "utf-8").toString("base64"),
+            branch: updateBranchName,
+            sha: existingFileSha,
+            committer: BOT_COMMIT_IDENTITY,
+            author: BOT_COMMIT_IDENTITY
+          });
+
+          let baselinePr =
+            (await findExistingBaselinePr({ octokit, branchName: updateBranchName })) || null;
+
+          if (!baselinePr) {
+            const prResponse = await octokit.rest.pulls.create({
+              owner: github.context.repo.owner,
+              repo: github.context.repo.repo,
+              head: updateBranchName,
+              base: baseBranch,
+              title: prTitle,
+              body: prBody
+            });
+            baselinePr = prResponse.data;
+            core.info(`Opened baseline update PR #${baselinePr.number} (${baselinePr.html_url})`);
+          } else {
+            core.info(
+              `Updated existing baseline PR #${baselinePr.number} (${baselinePr.html_url})`
+            );
+          }
+
+          core.setOutput("baseline-update-pr-number", String(baselinePr.number));
+          core.setOutput("baseline-update-pr-url", baselinePr.html_url);
+          core.setOutput("baseline-updated", "true");
         }
       }
     }

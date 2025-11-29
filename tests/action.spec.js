@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 
 process.env.NODE_ENV = "test";
 process.env.GITHUB_WORKSPACE = "/repo";
+const originalGithubRefName = process.env.GITHUB_REF_NAME;
+const originalGithubRef = process.env.GITHUB_REF;
 
 let inputs = {};
 const summary = vi.hoisted(() => {
@@ -54,6 +56,14 @@ const githubContext = vi.hoisted(() => ({
   repo: { owner: "owner", repo: "repo" }
 }));
 
+const createNotFoundError = vi.hoisted(() => {
+  return () => {
+    const error = new Error("Not Found");
+    error.status = 404;
+    return error;
+  };
+});
+
 const octokitMock = vi.hoisted(() => {
   const issuesApi = {
     listComments: vi.fn().mockResolvedValue({ data: [] }),
@@ -62,10 +72,12 @@ const octokitMock = vi.hoisted(() => {
     addLabels: vi.fn().mockResolvedValue({})
   };
   const reposApi = {
-    createOrUpdateFileContents: vi.fn().mockResolvedValue({})
+    createOrUpdateFileContents: vi.fn().mockResolvedValue({}),
+    getContent: vi.fn().mockRejectedValue(createNotFoundError())
   };
   const pullsApi = {
-    create: vi.fn().mockResolvedValue({ data: { number: 15, html_url: "https://example.com/pr/15" } })
+    create: vi.fn().mockResolvedValue({ data: { number: 15, html_url: "https://example.com/pr/15" } }),
+    list: vi.fn().mockResolvedValue({ data: [] })
   };
   const gitApi = {
     getRef: vi.fn().mockResolvedValue({ data: { object: { sha: "abc123" } } }),
@@ -76,7 +88,8 @@ const octokitMock = vi.hoisted(() => {
     rest: {
       issues: issuesApi,
       repos: reposApi,
-      pulls: pullsApi
+      pulls: pullsApi,
+      git: gitApi
     },
     issues: issuesApi,
     repos: reposApi,
@@ -128,14 +141,55 @@ vi.mock("node:fs/promises", () => {
 import runAction from "../src/action/index.js";
 
 const resetOctokitMocks = () => {
-  Object.values(octokitMock.rest.issues).forEach((fn) => fn.mockClear?.());
-  Object.values(octokitMock.rest.repos).forEach((fn) => fn.mockClear?.());
-  Object.values(octokitMock.rest.pulls).forEach((fn) => fn.mockClear?.());
-  Object.values(octokitMock.git).forEach((fn) => fn.mockClear?.());
+  Object.values(octokitMock.rest.issues).forEach((fn) => fn.mockReset?.());
+  Object.values(octokitMock.rest.repos).forEach((fn) => fn.mockReset?.());
+  Object.values(octokitMock.rest.pulls).forEach((fn) => fn.mockReset?.());
+  Object.values(octokitMock.git).forEach((fn) => fn.mockReset?.());
+
+  octokitMock.rest.issues.listComments.mockResolvedValue({ data: [] });
+  octokitMock.rest.issues.createComment.mockResolvedValue({});
+  octokitMock.rest.issues.updateComment.mockResolvedValue({});
+  octokitMock.rest.issues.addLabels.mockResolvedValue({});
+
+  octokitMock.rest.repos.createOrUpdateFileContents.mockResolvedValue({});
+  octokitMock.rest.repos.getContent.mockRejectedValue(createNotFoundError());
+
+  octokitMock.rest.pulls.create.mockResolvedValue({
+    data: { number: 15, html_url: "https://example.com/pr/15" }
+  });
+  octokitMock.rest.pulls.list.mockResolvedValue({ data: [] });
+
+  octokitMock.rest.git.getRef.mockResolvedValue({ data: { object: { sha: "abc123" } } });
+  octokitMock.rest.git.createRef.mockResolvedValue({});
 };
+
+const createEnoentError = () => {
+  const error = new Error("ENOENT");
+  error.code = "ENOENT";
+  return error;
+};
+
+const buildSnapshotFromResults = () =>
+  JSON.stringify(
+    [...mockRunResult.results]
+      .map((entry) => ({
+        label: entry.label,
+        file: entry.filePath,
+        tester: entry.testerLabel,
+        size: entry.sizeFormatted,
+        sizeBytes: typeof entry.size === "number" ? entry.size : 0,
+        limit: entry.maxSizeFormatted,
+        limitBytes: entry.maxSize
+      }))
+      .sort((a, b) => a.file.localeCompare(b.file)),
+    null,
+    2
+  );
 
 describe("GitHub Action integration", () => {
   beforeEach(() => {
+    delete process.env.GITHUB_REF_NAME;
+    delete process.env.GITHUB_REF;
     inputs = {};
     mockConfig = { root: "/repo", files: [] };
     mockRunResult = {
@@ -177,7 +231,7 @@ describe("GitHub Action integration", () => {
       pull_request: {
         number: 7,
         head: { repo: { full_name: "owner/repo" } },
-        base: { repo: { full_name: "owner/repo" } }
+        base: { repo: { full_name: "owner/repo" }, ref: "main" }
       }
     };
   });
@@ -249,35 +303,259 @@ describe("GitHub Action integration", () => {
     expect(setFailed).not.toHaveBeenCalled();
   });
 
-  it("creates a baseline PR when baseline-create-pr is true", async () => {
+  it("creates a baseline update pull request when update-baseline is true", async () => {
     mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/add-bundle";
     inputs = {
       "github-token": "token",
-      "baseline-path": "baseline.json",
+      "baseline-report-path": "baseline.json",
       "update-baseline": "true",
-      "baseline-create-pr": "true",
-      "baseline-branch": "main",
-      "baseline-pr-title": "chore: update baseline",
-      "baseline-pr-body": "refresh baseline",
-      "baseline-pr-branch-prefix": "overweight/base",
-      "baseline-pr-labels": "baseline"
+      "update-pr-title": "chore: update baseline",
+      "update-pr-body": "Auto PR body",
+      "update-branch-prefix": "overweight/test"
     };
-    githubContext.payload = { action: "push" };
-    fsMock.readFile.mockResolvedValue("[]");
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    octokitMock.rest.git.getRef
+      .mockRejectedValueOnce(createNotFoundError())
+      .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
 
     await runAction();
 
     expect(setFailed).not.toHaveBeenCalled();
-    expect(octokitMock.rest.issues.listComments).not.toHaveBeenCalled();
-    expect(octokitMock.git.getRef).toHaveBeenCalled();
-    expect(octokitMock.git.createRef).toHaveBeenCalled();
+    expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/baseline.json", expect.any(String));
+    expect(octokitMock.rest.git.createRef).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: "refs/heads/overweight/test/pr-7" })
+    );
     expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "baseline.json" })
+      expect.objectContaining({
+        path: "baseline.json",
+        branch: "overweight/test/pr-7",
+        sha: undefined,
+        committer: expect.objectContaining({ name: "Overweight Bot" })
+      })
+    );
+    expect(octokitMock.rest.pulls.list).toHaveBeenCalledWith(
+      expect.objectContaining({ head: "owner:overweight/test/pr-7", state: "open" })
     );
     expect(octokitMock.rest.pulls.create).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "chore: update baseline" })
+      expect.objectContaining({
+        base: "main",
+        head: "overweight/test/pr-7",
+        title: "chore: update baseline (🧳 Overweight Guard)",
+        body: "Auto PR body"
+      })
     );
-    expect(setOutput).toHaveBeenCalledWith("baseline-pr-url", "https://example.com/pr/15");
+    expect(setOutput).toHaveBeenCalledWith("baseline-updated", "true");
+    expect(setOutput).toHaveBeenCalledWith("baseline-update-pr-number", "15");
+    expect(setOutput).toHaveBeenCalledWith(
+      "baseline-update-pr-url",
+      expect.stringContaining("https://example.com/pr/15")
+    );
+  });
+
+  it("creates a baseline update pull request when existing baseline content changes", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/update-baseline";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    const previousSnapshot = JSON.stringify(
+      [
+        {
+          label: "bundle",
+          file: "dist/file.js",
+          tester: "gzip",
+          size: "10 kB",
+          sizeBytes: 10000,
+          limit: "10 kB",
+          limitBytes: 10000
+        }
+      ],
+      null,
+      2
+    );
+    fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
+    fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
+    octokitMock.rest.git.getRef
+      .mockRejectedValueOnce(createNotFoundError())
+      .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
+
+    await runAction();
+
+    expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/baseline.json", expect.any(String));
+    expect(octokitMock.rest.pulls.create).toHaveBeenCalledTimes(1);
+    expect(setOutput).toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("defaults baseline-report-path to report-file when updating baseline without explicit path", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/default-report";
+    inputs = {
+      "github-token": "token",
+      "report-file": "custom-baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    octokitMock.rest.git.getRef
+      .mockRejectedValueOnce(createNotFoundError())
+      .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
+
+    await runAction();
+
+    expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/custom-baseline.json", expect.any(String));
+    expect(octokitMock.rest.pulls.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips baseline update when update-baseline is false", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/no-update";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "false"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("fails when update-baseline is true but github-token is missing", async () => {
+    mockRunResult.stats.hasFailures = false;
+    inputs = {
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setFailed).toHaveBeenCalledWith(
+      "update-baseline requires github-token to be provided."
+    );
+  });
+
+  it("skips baseline update when checks fail even if update-baseline is true", async () => {
+    mockRunResult.stats.hasFailures = true;
+    process.env.GITHUB_REF_NAME = "feature/failing";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("updates existing baseline PR instead of opening a new one", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/reuse";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    octokitMock.rest.repos.getContent.mockResolvedValueOnce({
+      data: { type: "file", sha: "existing-sha" }
+    });
+    octokitMock.rest.pulls.list.mockResolvedValueOnce({
+      data: [{ number: 42, html_url: "https://example.com/pr/42" }]
+    });
+
+    await runAction();
+
+    expect(octokitMock.rest.git.createRef).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
+      expect.objectContaining({ sha: "existing-sha" })
+    );
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+    expect(setOutput).toHaveBeenCalledWith("baseline-update-pr-number", "42");
+    expect(setOutput).toHaveBeenCalledWith("baseline-update-pr-url", "https://example.com/pr/42");
+  });
+
+  it("does nothing when baseline content is unchanged", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/no-change";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    const snapshot = buildSnapshotFromResults();
+    fsMock.readFile.mockResolvedValueOnce(snapshot);
+    fsMock.readFile.mockResolvedValueOnce(snapshot);
+
+    await runAction();
+
+    expect(octokitMock.rest.git.createRef).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("detects PR number when workflow_dispatch runs on a branch with an open PR", async () => {
+    mockRunResult.stats.hasFailures = false;
+    githubContext.payload = {
+      action: "workflow_dispatch",
+      ref: "refs/heads/feature/manual"
+    };
+    process.env.GITHUB_REF_NAME = "feature/manual";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    octokitMock.rest.pulls.list
+      .mockResolvedValueOnce({ data: [{ number: 88, html_url: "https://example.com/pr/88" }] })
+      .mockResolvedValueOnce({ data: [{ number: 90, html_url: "https://example.com/pr/90" }] });
+    octokitMock.rest.git.getRef.mockResolvedValue({ data: { object: { sha: "abc123" } } });
+    octokitMock.rest.repos.getContent.mockResolvedValueOnce({
+      data: { type: "file", sha: "baseline-sha" }
+    });
+
+    await runAction();
+
+    expect(octokitMock.rest.git.createRef).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: "overweight/baseline/pr-88", sha: "baseline-sha" })
+    );
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+    expect(setOutput).toHaveBeenCalledWith("baseline-update-pr-number", "90");
+    expect(setOutput).toHaveBeenCalledWith("baseline-update-pr-url", "https://example.com/pr/90");
+  });
+
+  afterAll(() => {
+    if (originalGithubRefName === undefined) {
+      delete process.env.GITHUB_REF_NAME;
+    } else {
+      process.env.GITHUB_REF_NAME = originalGithubRefName;
+    }
+
+    if (originalGithubRef === undefined) {
+      delete process.env.GITHUB_REF;
+    } else {
+      process.env.GITHUB_REF = originalGithubRef;
+    }
   });
 });
 

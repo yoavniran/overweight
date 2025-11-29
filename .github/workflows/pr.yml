@@ -8,7 +8,7 @@ on:
             - main
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   
 jobs:
@@ -45,5 +45,4 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-pr: true
           update-baseline: true
-          baseline-create-pr: true
 

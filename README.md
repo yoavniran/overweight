@@ -119,17 +119,36 @@ jobs:
         with:
           config: overweight.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          baseline-path: overweight-report.json
-          baseline-branch: main
+          baseline-report-path: overweight-report.json
           update-baseline: true
           report-file: overweight-report.json
 ```
 
 - `report-json`, `report-table`, and `report-file` outputs enable downstream workflows (PR comments, Slack alerts, artifact uploads, etc.).
-- When `baseline-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the baseline branch
+- When `baseline-report-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the branch that ran the workflow. If `baseline-report-path` is omitted and `report-file` is set, the baseline defaults to that path. The update runs on a dedicated branch + pull request using `update-pr-title`, `update-pr-body`, and `update-branch-prefix`.
 - `comment-on-pr-always` (first run only) and `comment-on-pr-each-run` control when PR comments are posted even if checks pass.
-- `baseline-create-pr` opens a dedicated branch + PR when the baseline needs to change. Needed for protected default branches. Customize the PR via `baseline-pr-*` inputs.
-- Additional outputs (`report-file`, `baseline-pr-url`, `baseline-pr-number`) make it easy to chain artifact uploads or follow-up workflows.
+- Additional outputs (`report-file`, `baseline-updated`, `baseline-update-pr-url`, `baseline-update-pr-number`) make it easy to chain artifact uploads or follow-up workflows.
+
+### Baseline auto-PR requirements
+
+When `update-baseline: true`, Overweight will:
+
+1. Regenerate the baseline snapshot locally.
+2. Create a temporary branch from the PR's base branch.
+3. Commit the updated baseline file with the bot identity.
+4. Open a pull request targeting the base branch using the configured title/body.
+
+To allow that flow:
+
+- Ensure the workflow grants `contents: write` permission (GitHub defaults to read-only).
+- Check out the repository with `actions/checkout@v4` (fetch-depth defaults are fine because commits are created via the GitHub API).
+- Pass a `github-token` secret with permission to create branches and PRs in the repository (the default `secrets.GITHUB_TOKEN` works for same-repo PRs).
+- Optionally customize `update-pr-title`, `update-pr-body`, and `update-branch-prefix` to fit your repo conventions.
+- In the repository settings go to **Settings → Actions → General → Workflow permissions** and enable **Allow GitHub Actions to create and approve pull requests**, otherwise GitHub will block the auto-PR.
+- Overweight reuses the same update branch/PR per source PR (branch suffix `pr-<number>`), so subsequent pushes to your feature branch simply update the existing baseline PR instead of opening multiples.
+- Manual workflows triggered on a feature branch automatically detect the open PR for that branch and reuse its baseline update PR instead of opening a new one.
+- Baseline updates occur only when all size checks pass. Failing runs skip the baseline refresh entirely to avoid locking in broken results.
+
 
 ## Release & contributing
 

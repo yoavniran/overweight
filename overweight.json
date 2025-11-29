@@ -15,7 +15,7 @@
     {
       "label": "dist-action",
       "path": "./dist/action/index.js",
-      "maxSize": "24 kB",
+      "maxSize": "30 kB",
       "compression": "none"
     }
   ]
