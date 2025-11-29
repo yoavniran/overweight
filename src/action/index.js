@@ -406,6 +406,9 @@ export const runAction = async () => {
     core.setOutput("report-file", resolvedReportPath);
 
     if (baselinePath) {
+      if (result.stats.hasFailures) {
+        core.info("Skipping baseline update because size checks failed.");
+      } else
       if (!updateBaseline) {
         core.info("update-baseline=false, skipping baseline write.");
       } else if (!githubToken || !octokit) {

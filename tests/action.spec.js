@@ -444,6 +444,25 @@ describe("GitHub Action integration", () => {
     );
   });
 
+  it("skips baseline update when checks fail even if update-baseline is true", async () => {
+    mockRunResult.stats.hasFailures = true;
+    process.env.GITHUB_REF_NAME = "feature/failing";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
   it("updates existing baseline PR instead of opening a new one", async () => {
     mockRunResult.stats.hasFailures = false;
     process.env.GITHUB_REF_NAME = "feature/reuse";

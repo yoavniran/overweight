@@ -146,6 +146,7 @@ To allow that flow:
 - Optionally customize `update-pr-title`, `update-pr-body`, and `update-branch-prefix` to fit your repo conventions.
 - In the repository settings go to **Settings → Actions → General → Workflow permissions** and enable **Allow GitHub Actions to create and approve pull requests**, otherwise GitHub will block the auto-PR.
 - Overweight reuses the same update branch/PR per source PR (branch suffix `pr-<number>`), so subsequent pushes to your feature branch simply update the existing baseline PR instead of opening multiples.
+- Baseline updates occur only when all size checks pass. Failing runs skip the baseline refresh entirely to avoid locking in broken results.
 
 
 ## Release & contributing
