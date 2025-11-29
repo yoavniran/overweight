@@ -506,19 +506,17 @@ export const runAction = async () => {
           });
           const repoRelativePath = ensureRelativePath(baselinePath);
 
-          const branchExisted = await ensureUpdateBranchExists({
+          await ensureUpdateBranchExists({
             octokit,
             branchName: updateBranchName,
             baseBranch
           });
 
-          const existingFileSha = branchExisted
-            ? await getExistingFileSha({
-                octokit,
-                branchName: updateBranchName,
-                path: repoRelativePath
-              })
-            : undefined;
+          const existingFileSha = await getExistingFileSha({
+            octokit,
+            branchName: updateBranchName,
+            path: repoRelativePath
+          });
 
           await writeBaseline(baselinePath, summaryRows, content);
           core.info(`Wrote updated baseline snapshot to ${baselinePath}`);

@@ -354,6 +354,36 @@ describe("GitHub Action integration", () => {
     );
   });
 
+  it("includes the existing file sha when creating the baseline update branch", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/add-sha";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    octokitMock.rest.git.getRef
+      .mockRejectedValueOnce(createNotFoundError())
+      .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
+    octokitMock.rest.repos.getContent.mockResolvedValueOnce({
+      data: { type: "file", sha: "baseline-sha" }
+    });
+
+    await runAction();
+
+    expect(octokitMock.rest.repos.getContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "baseline.json",
+        ref: "overweight/baseline/pr-7"
+      })
+    );
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
+      expect.objectContaining({ sha: "baseline-sha" })
+    );
+  });
+
   it("creates a baseline update pull request when existing baseline content changes", async () => {
     mockRunResult.stats.hasFailures = false;
     process.env.GITHUB_REF_NAME = "feature/update-baseline";
