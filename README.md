@@ -125,10 +125,25 @@ jobs:
 ```
 
 - `report-json`, `report-table`, and `report-file` outputs enable downstream workflows (PR comments, Slack alerts, artifact uploads, etc.).
-- When `baseline-report-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the branch that ran the workflow. If `baseline-report-path` is omitted and `report-file` is set, the baseline defaults to that path.
-- `baseline-protected-branches` (comma-separated names or glob patterns) blocks inline updates on protected or otherwise restricted branches. If an update is required on one of these branches, the action fails with guidance instead of writing changes.
+- When `baseline-report-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the branch that ran the workflow. If `baseline-report-path` is omitted and `report-file` is set, the baseline defaults to that path. The update runs on a dedicated branch + pull request using `update-pr-title`, `update-pr-body`, and `update-branch-prefix`.
 - `comment-on-pr-always` (first run only) and `comment-on-pr-each-run` control when PR comments are posted even if checks pass.
-- Additional outputs (`report-file`, `baseline-updated`) make it easy to chain artifact uploads or follow-up workflows.
+- Additional outputs (`report-file`, `baseline-updated`, `baseline-update-pr-url`, `baseline-update-pr-number`) make it easy to chain artifact uploads or follow-up workflows.
+
+### Baseline auto-PR requirements
+
+When `update-baseline: true`, Overweight will:
+
+1. Regenerate the baseline snapshot locally.
+2. Create a temporary branch from the PR's base branch.
+3. Commit the updated baseline file with the bot identity.
+4. Open a pull request targeting the base branch using the configured title/body.
+
+To allow that flow:
+
+- Ensure the workflow grants `contents: write` permission (GitHub defaults to read-only).
+- Check out the repository with `actions/checkout@v4` (fetch-depth defaults are fine because commits are created via the GitHub API).
+- Pass a `github-token` secret with permission to create branches and PRs in the repository (the default `secrets.GITHUB_TOKEN` works for same-repo PRs).
+- Optionally customize `update-pr-title`, `update-pr-body`, and `update-branch-prefix` to fit your repo conventions.
 
 
 ## Release & contributing

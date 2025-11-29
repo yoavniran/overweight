@@ -188,7 +188,7 @@ describe("GitHub Action integration", () => {
       pull_request: {
         number: 7,
         head: { repo: { full_name: "owner/repo" } },
-        base: { repo: { full_name: "owner/repo" } }
+        base: { repo: { full_name: "owner/repo" }, ref: "main" }
       }
     };
   });
@@ -260,13 +260,16 @@ describe("GitHub Action integration", () => {
     expect(setFailed).not.toHaveBeenCalled();
   });
 
-  it("updates the baseline inline on the current branch when unprotected and update-baseline is true", async () => {
+  it("creates a baseline update pull request when update-baseline is true", async () => {
     mockRunResult.stats.hasFailures = false;
     process.env.GITHUB_REF_NAME = "feature/add-bundle";
     inputs = {
       "github-token": "token",
       "baseline-report-path": "baseline.json",
-      "update-baseline": "true"
+      "update-baseline": "true",
+      "update-pr-title": "chore: update baseline",
+      "update-pr-body": "Auto PR body",
+      "update-branch-prefix": "overweight/test"
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
@@ -275,10 +278,24 @@ describe("GitHub Action integration", () => {
 
     expect(setFailed).not.toHaveBeenCalled();
     expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/baseline.json", expect.any(String));
+    expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: "heads/main" })
+    );
+    expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "baseline.json", branch: expect.stringContaining("overweight/test") })
+    );
+    expect(octokitMock.rest.pulls.create).toHaveBeenCalledWith(
+      expect.objectContaining({ base: "main", title: "chore: update baseline", body: "Auto PR body" })
+    );
     expect(setOutput).toHaveBeenCalledWith("baseline-updated", "true");
+    expect(setOutput).toHaveBeenCalledWith(
+      "baseline-update-pr-url",
+      expect.stringContaining("https://example.com/pr/15")
+    );
   });
 
-  it("updates an existing baseline inline when content changes", async () => {
+  it("creates a baseline update pull request when existing baseline content changes", async () => {
     mockRunResult.stats.hasFailures = false;
     process.env.GITHUB_REF_NAME = "feature/update-baseline";
     inputs = {
@@ -307,87 +324,8 @@ describe("GitHub Action integration", () => {
     await runAction();
 
     expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/baseline.json", expect.any(String));
+    expect(octokitMock.rest.pulls.create).toHaveBeenCalledTimes(1);
     expect(setOutput).toHaveBeenCalledWith("baseline-updated", "true");
-  });
-
-  it("fails when baseline changes are detected on a protected branch", async () => {
-    mockRunResult.stats.hasFailures = false;
-    process.env.GITHUB_REF_NAME = "main";
-    inputs = {
-      "github-token": "token",
-      "baseline-report-path": "baseline.json",
-      "update-baseline": "true",
-      "baseline-protected-branches": "main"
-    };
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-
-    await runAction();
-
-    expect(fsMock.writeFile).not.toHaveBeenCalled();
-    expect(setFailed).toHaveBeenCalledWith(
-      expect.stringContaining("Baseline update required but branch")
-    );
-  });
-
-  it("fails when baseline changes are detected on a protected branch defined via comma-separated list", async () => {
-    mockRunResult.stats.hasFailures = false;
-    process.env.GITHUB_REF_NAME = "prod";
-    inputs = {
-      "github-token": "token",
-      "baseline-report-path": "baseline.json",
-      "update-baseline": "true",
-      "baseline-protected-branches": "main,prod"
-    };
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-
-    await runAction();
-
-    expect(fsMock.writeFile).not.toHaveBeenCalled();
-    expect(setFailed).toHaveBeenCalledWith(
-      expect.stringContaining("Baseline update required but branch")
-    );
-  });
-
-  it("fails when baseline changes are detected on a branch matched by glob pattern", async () => {
-    mockRunResult.stats.hasFailures = false;
-    process.env.GITHUB_REF_NAME = "release-2025.11";
-    inputs = {
-      "github-token": "token",
-      "baseline-report-path": "baseline.json",
-      "update-baseline": "true",
-      "baseline-protected-branches": "main,release-*"
-    };
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-
-    await runAction();
-
-    expect(fsMock.writeFile).not.toHaveBeenCalled();
-    expect(setFailed).toHaveBeenCalledWith(
-      expect.stringContaining("Baseline update required but branch")
-    );
-  });
-
-  it("fails when baseline changes are detected on a branch matched by nested glob pattern", async () => {
-    mockRunResult.stats.hasFailures = false;
-    process.env.GITHUB_REF_NAME = "hotfix/1234";
-    inputs = {
-      "github-token": "token",
-      "baseline-report-path": "baseline.json",
-      "update-baseline": "true",
-      "baseline-protected-branches": "hotfix/*"
-    };
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-
-    await runAction();
-
-    expect(fsMock.writeFile).not.toHaveBeenCalled();
-    expect(setFailed).toHaveBeenCalledWith(
-      expect.stringContaining("Baseline update required but branch")
-    );
   });
 
   it("defaults baseline-report-path to report-file when updating baseline without explicit path", async () => {
@@ -424,6 +362,23 @@ describe("GitHub Action integration", () => {
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
     expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("fails when update-baseline is true but github-token is missing", async () => {
+    mockRunResult.stats.hasFailures = false;
+    inputs = {
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setFailed).toHaveBeenCalledWith(
+      "update-baseline requires github-token to be provided."
+    );
   });
 
   afterAll(() => {
