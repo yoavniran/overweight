@@ -2,6 +2,7 @@ name: Overweight Release
 
 on:
   workflow_dispatch:
+
     inputs:
       dry-run:
         description: "Preview semantic-release without publishing or tagging."
