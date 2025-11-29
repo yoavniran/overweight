@@ -489,12 +489,13 @@ export const runAction = async () => {
           `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate})`
         );
 
-        if (branchIsProtected) {
+        if (!needsUpdate) {
+          core.info("Baseline is already up to date; no changes written.");
+        }
+        else if (branchIsProtected) {
           core.info(
             `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
           );
-        } else if (!needsUpdate) {
-          core.info("Baseline is already up to date; no changes written.");
         } else {
           const baseBranch = resolveBaseBranch();
           const prTitleInput = core.getInput("update-pr-title") || "chore: update baseline report";
