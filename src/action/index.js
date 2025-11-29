@@ -387,7 +387,8 @@ export const runAction = async () => {
           core.info(`Wrote updated baseline snapshot to ${baselinePath}`);
 
           const baseBranch = resolveBaseBranch();
-          const prTitle = core.getInput("update-pr-title") || "chore: update baseline report";
+          const prTitle =
+            `${core.getInput("update-pr-title") || "chore: update baseline report"} (🧳 Overweight Guard)`;
           const prBody =
             core.getInput("update-pr-body") || "Automatic pull request updating the baseline report.";
           const branchPrefix = core.getInput("update-branch-prefix") || "overweight/baseline";

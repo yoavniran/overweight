@@ -286,7 +286,11 @@ describe("GitHub Action integration", () => {
       expect.objectContaining({ path: "baseline.json", branch: expect.stringContaining("overweight/test") })
     );
     expect(octokitMock.rest.pulls.create).toHaveBeenCalledWith(
-      expect.objectContaining({ base: "main", title: "chore: update baseline", body: "Auto PR body" })
+      expect.objectContaining({
+        base: "main",
+        title: "chore: update baseline (🧳 Overweight Guard)",
+        body: "Auto PR body"
+      })
     );
     expect(setOutput).toHaveBeenCalledWith("baseline-updated", "true");
     expect(setOutput).toHaveBeenCalledWith(
@@ -341,10 +345,8 @@ describe("GitHub Action integration", () => {
 
     await runAction();
 
-    expect(fsMock.writeFile).toHaveBeenCalledWith(
-      "/repo/custom-baseline.json",
-      expect.any(String)
-    );
+    expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/custom-baseline.json", expect.any(String));
+    expect(octokitMock.rest.pulls.create).toHaveBeenCalledTimes(1);
   });
 
   it("skips baseline update when update-baseline is false", async () => {
@@ -361,6 +363,39 @@ describe("GitHub Action integration", () => {
     await runAction();
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("does nothing when baseline content is unchanged", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/no-change";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    const snapshot = JSON.stringify(
+      [
+        {
+          label: "bundle",
+          file: "dist/file.js",
+          tester: "gzip",
+          size: "12 kB",
+          sizeBytes: 12000,
+          limit: "10 kB",
+          limitBytes: 10000
+        }
+      ],
+      null,
+      2
+    );
+    fsMock.readFile.mockResolvedValueOnce(snapshot);
+    fsMock.readFile.mockResolvedValueOnce(snapshot);
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
     expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
   });
 
