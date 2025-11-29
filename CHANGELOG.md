@@ -1,13 +1,13 @@
 # Changelog
 
-## 1.0.1 (2025-11-27)
+# 1.0.1 (2025-11-27)
 
 ### Bug Fixes
 
 * update CLI path in package.json to remove leading dot ([a853b14](https://github.com/yoavniran/overweight/commit/a853b14896f7fec2b8387dc37773bcf996782b2c))
 
 
-## 1.0.0 (2025-11-27)
+# 1.0.0 (2025-11-27)
 
 ### Bug Fixes
 
