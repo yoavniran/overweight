@@ -41,9 +41,8 @@ const readBaseline = async (baselinePath) => {
   }
 };
 
-const writeBaseline = async (baselinePath, rows) => {
-  await fs.mkdir(path.dirname(baselinePath), { recursive: true });
-  const sorted = [...rows]
+const buildBaselineSnapshot = (rows) =>
+  [...rows]
     .map((row) => ({
       label: row.label,
       file: row.file,
@@ -55,7 +54,27 @@ const writeBaseline = async (baselinePath, rows) => {
     }))
     .sort((a, b) => a.file.localeCompare(b.file));
 
-  await fs.writeFile(baselinePath, JSON.stringify(sorted, null, 2));
+const serializeBaselineSnapshot = (rows) => JSON.stringify(buildBaselineSnapshot(rows), null, 2);
+
+const writeBaseline = async (baselinePath, rows, precomputedContent) => {
+  await fs.mkdir(path.dirname(baselinePath), { recursive: true });
+  const content = precomputedContent ?? serializeBaselineSnapshot(rows);
+  await fs.writeFile(baselinePath, content);
+};
+
+const getBaselineUpdateInfo = async (baselinePath, rows) => {
+  const nextContent = serializeBaselineSnapshot(rows);
+
+  try {
+    const currentContent = await fs.readFile(baselinePath, "utf-8");
+    return { needsUpdate: currentContent !== nextContent, content: nextContent };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return { needsUpdate: true, content: nextContent };
+    }
+
+    throw error;
+  }
 };
 
 const mergeWithBaseline = (rows, baseline) => {
@@ -118,91 +137,6 @@ const renderHtmlTable = (rows) => {
   return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
 };
 
-const getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
-
-const ensureRelativePath = (absolutePath) => {
-  const workspaceRoot = getWorkspaceRoot();
-  const relative = path.relative(workspaceRoot, absolutePath);
-
-  if (relative.startsWith("..")) {
-    throw new Error(`Baseline path "${absolutePath}" is outside of the repository checkout (${workspaceRoot}).`);
-  }
-
-  return relative.replace(/\\/g, "/");
-};
-
-const sanitizeBranchName = (prefix) =>
-  `${prefix || "overweight/baseline"}`.replace(/\/+$/, "");
-
-const parseLabels = (labels) =>
-  labels
-    ?.split(",")
-    .map((label) => label.trim())
-    .filter(Boolean) ?? [];
-
-const createBaselinePullRequest = async ({
-  octokit,
-  baselinePath,
-  baseBranch,
-  title,
-  body,
-  branchPrefix,
-  labels
-}) => {
-  const { owner, repo } = github.context.repo;
-  const baseRef = await octokit.rest.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${baseBranch}`
-  });
-
-  const branchName = `${sanitizeBranchName(branchPrefix)}/${new Date()
-    .toISOString()
-    .replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
-
-  await octokit.rest.git.createRef({
-    owner,
-    repo,
-    ref: `refs/heads/${branchName}`,
-    sha: baseRef.data.object.sha
-  });
-
-  const repoRelativePath = ensureRelativePath(baselinePath);
-  const fileContent = await fs.readFile(baselinePath, "utf-8");
-
-  await octokit.rest.repos.createOrUpdateFileContents({
-    owner,
-    repo,
-    path: repoRelativePath,
-    message: title,
-    content: Buffer.from(fileContent, "utf-8").toString("base64"),
-    branch: branchName
-  });
-
-  const pr = await octokit.rest.pulls.create({
-    owner,
-    repo,
-    head: branchName,
-    base: baseBranch,
-    title,
-    body
-  });
-
-  const parsedLabels = parseLabels(labels);
-  if (parsedLabels.length) {
-    await octokit.rest.issues.addLabels({
-      owner,
-      repo,
-      issue_number: pr.data.number,
-      labels: parsedLabels
-    });
-  }
-
-  core.info(`Opened baseline update PR #${pr.data.number} (${pr.data.html_url})`);
-  core.setOutput("baseline-pr-number", String(pr.data.number));
-  core.setOutput("baseline-pr-url", pr.data.html_url);
-};
-
 const buildInlineConfig = (input) => {
   if (!input) {
     return null;
@@ -218,6 +152,31 @@ const buildInlineConfig = (input) => {
 
 const resolveWorkingDirectory = (input) =>
   input ? path.resolve(process.cwd(), input) : process.cwd();
+
+const parseProtectedBranchPatterns = (input) =>
+  input
+    ?.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean) ?? [];
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const patternToRegex = (pattern) =>
+  new RegExp(`^${pattern.split("*").map((segment) => escapeRegex(segment)).join(".*")}$`);
+
+const branchMatchesPattern = (branch, pattern) => {
+  if (!pattern) {
+    return false;
+  }
+
+  if (pattern === "*") {
+    return true;
+  }
+
+  return patternToRegex(pattern).test(branch);
+};
+
+const isProtectedBranch = (branch, patterns) =>
+  Boolean(branch) && patterns.some((pattern) => branchMatchesPattern(branch, pattern));
 
 const resolveConfig = async () => {
   const configInput = core.getInput("config");
@@ -357,38 +316,31 @@ export const runAction = async () => {
     core.setOutput("report-file", resolvedReportPath);
 
     if (baselinePath) {
-      const targetBranch = core.getInput("baseline-branch") || "main";
-      const createBaselinePr = core.getBooleanInput("baseline-create-pr");
-      const currentBranch = getBranchName();
-      core.info(
-        `Overweight: baseline path detected at ${baselinePath} (update=${updateBaseline}, createPR=${createBaselinePr})`
-      );
+      if (!updateBaseline) {
+        core.info("update-baseline=false, skipping baseline write.");
+      } else {
+        const currentBranch = getBranchName();
+        const protectedPatterns = parseProtectedBranchPatterns(
+          core.getInput("baseline-protected-branches")
+        );
+        const { needsUpdate, content } = await getBaselineUpdateInfo(baselinePath, summaryRows);
+        const branchIsProtected = isProtectedBranch(currentBranch, protectedPatterns);
+        core.info(
+          `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch || "unknown"}, needsUpdate=${needsUpdate}, protected=${branchIsProtected})`
+        );
 
-      if (updateBaseline) {
-        if (createBaselinePr) {
-          if (!githubToken) {
-            core.setFailed("baseline-create-pr requires github-token to be set.");
-          } else {
-            await writeBaseline(baselinePath, summaryRows);
-            await createBaselinePullRequest({
-              octokit,
-              baselinePath,
-              baseBranch: targetBranch,
-              title: core.getInput("baseline-pr-title") || "chore: update baseline report",
-              body: core.getInput("baseline-pr-body") || "This PR refreshes the baseline report",
-              branchPrefix: core.getInput("baseline-pr-branch-prefix") || "overweight/baseline",
-              labels: core.getInput("baseline-pr-labels") || "",
-            });
-            core.setOutput("baseline-updated", "true");
-          }
-        } else if (currentBranch === targetBranch) {
-          await writeBaseline(baselinePath, summaryRows);
-          core.info(`Saved updated baseline report to ${baselinePath}`);
-          core.setOutput("baseline-updated", "true");
-        } else {
-          core.info(
-            `Skipping baseline update because current branch "${currentBranch}" does not match target branch "${targetBranch}". Enable baseline-create-pr to open a pull request automatically.`
+        if (!needsUpdate) {
+          core.info("Baseline is already up to date; no changes written.");
+        } else if (branchIsProtected) {
+          throw new Error(
+            `Baseline update required but branch "${currentBranch}" matches baseline-protected-branches. Run this action on an unprotected branch or remove the protection entry.`
           );
+        } else {
+          await writeBaseline(baselinePath, summaryRows, content);
+          core.info(
+            `Saved updated baseline report to ${baselinePath} on branch ${currentBranch || "(unknown)"}`
+          );
+          core.setOutput("baseline-updated", "true");
         }
       }
     }

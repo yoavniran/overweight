@@ -120,16 +120,16 @@ jobs:
           config: overweight.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           baseline-report-path: overweight-report.json
-          baseline-branch: main
           update-baseline: true
           report-file: overweight-report.json
 ```
 
 - `report-json`, `report-table`, and `report-file` outputs enable downstream workflows (PR comments, Slack alerts, artifact uploads, etc.).
-- When `baseline-report-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the baseline branch. If `baseline-report-path` is omitted, `update-baseline` is `true`, and `report-file` is set, the baseline file defaults to the same path as the report.
+- When `baseline-report-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the branch that ran the workflow. If `baseline-report-path` is omitted and `report-file` is set, the baseline defaults to that path.
+- `baseline-protected-branches` (comma-separated names or glob patterns) blocks inline updates on protected or otherwise restricted branches. If an update is required on one of these branches, the action fails with guidance instead of writing changes.
 - `comment-on-pr-always` (first run only) and `comment-on-pr-each-run` control when PR comments are posted even if checks pass.
-- `baseline-create-pr` opens a dedicated branch + PR when the baseline needs to change. Needed for protected default branches. Customize the PR via `baseline-pr-*` inputs.
-- Additional outputs (`report-file`, `baseline-pr-url`, `baseline-pr-number`) make it easy to chain artifact uploads or follow-up workflows.
+- Additional outputs (`report-file`, `baseline-updated`) make it easy to chain artifact uploads or follow-up workflows.
+
 
 ## Release & contributing
 

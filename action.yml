@@ -29,32 +29,12 @@ inputs:
   baseline-report-path:
     description: "Optional path to a JSON file with baseline results. Defaults to `report-file` when omitted and `update-baseline` is true."
     required: false
-  baseline-branch:
-    description: "Branch name that acts as the baseline when updating reports."
-    required: false
-    default: "main"
   update-baseline:
-    description: "Persist the new baseline file when running on the baseline branch."
+    description: "Write the latest run results into `baseline-report-path`. When false, the action will never touch the baseline file."
     required: false
     default: "false"
-  baseline-create-pr:
-    description: "Open a branch + pull request with the updated baseline instead of updating in-place."
-    required: false
-    default: "false"
-  baseline-pr-title:
-    description: "Title for the automatically created baseline pull request."
-    required: false
-    default: "chore: update bundle size baseline"
-  baseline-pr-body:
-    description: "Body for the automatically created baseline pull request."
-    required: false
-    default: "This PR refreshes the bundle size baseline."
-  baseline-pr-branch-prefix:
-    description: "Prefix used when generating branches for baseline PRs."
-    required: false
-    default: "overweight/baseline"
-  baseline-pr-labels:
-    description: "Comma-separated labels added to the baseline PR."
+  baseline-protected-branches:
+    description: "Comma-separated list of branch names or glob patterns where inline baseline updates are forbidden (for example: `main,release-*`)."
     required: false
   report-file:
     description: "File path where the json report will be written."
@@ -71,10 +51,6 @@ outputs:
     description: "true if the baseline report file was updated."
   report-file:
     description: "Absolute path to the generated json report."
-  baseline-pr-url:
-    description: "URL of the baseline update pull request (when created)."
-  baseline-pr-number:
-    description: "Number of the baseline update pull request (when created)."
 runs:
   using: "node20"
   main: "dist/action/index.js"

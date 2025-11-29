@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 
 process.env.NODE_ENV = "test";
 process.env.GITHUB_WORKSPACE = "/repo";
+const originalGithubRefName = process.env.GITHUB_REF_NAME;
+const originalGithubRef = process.env.GITHUB_REF;
 
 let inputs = {};
 const summary = vi.hoisted(() => {
@@ -135,8 +137,16 @@ const resetOctokitMocks = () => {
   Object.values(octokitMock.git).forEach((fn) => fn.mockClear?.());
 };
 
+const createEnoentError = () => {
+  const error = new Error("ENOENT");
+  error.code = "ENOENT";
+  return error;
+};
+
 describe("GitHub Action integration", () => {
   beforeEach(() => {
+    delete process.env.GITHUB_REF_NAME;
+    delete process.env.GITHUB_REF;
     inputs = {};
     mockConfig = { root: "/repo", files: [] };
     mockRunResult = {
@@ -250,48 +260,146 @@ describe("GitHub Action integration", () => {
     expect(setFailed).not.toHaveBeenCalled();
   });
 
-  it("creates a baseline PR when baseline-create-pr is true", async () => {
+  it("updates the baseline inline on the current branch when unprotected and update-baseline is true", async () => {
     mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/add-bundle";
     inputs = {
       "github-token": "token",
       "baseline-report-path": "baseline.json",
-      "update-baseline": "true",
-      "baseline-create-pr": "true",
-      "baseline-branch": "main",
-      "baseline-pr-title": "chore: update baseline",
-      "baseline-pr-body": "refresh baseline",
-      "baseline-pr-branch-prefix": "overweight/base",
-      "baseline-pr-labels": "baseline"
+      "update-baseline": "true"
     };
-    githubContext.payload = { action: "push" };
-    fsMock.readFile.mockResolvedValue("[]");
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
 
     await runAction();
 
     expect(setFailed).not.toHaveBeenCalled();
-    expect(octokitMock.rest.issues.listComments).not.toHaveBeenCalled();
-    expect(octokitMock.git.getRef).toHaveBeenCalled();
-    expect(octokitMock.git.createRef).toHaveBeenCalled();
-    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "baseline.json" })
+    expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/baseline.json", expect.any(String));
+    expect(setOutput).toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("updates an existing baseline inline when content changes", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/update-baseline";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    const previousSnapshot = JSON.stringify(
+      [
+        {
+          label: "bundle",
+          file: "dist/file.js",
+          tester: "gzip",
+          size: "10 kB",
+          sizeBytes: 10000,
+          limit: "10 kB",
+          limitBytes: 10000
+        }
+      ],
+      null,
+      2
     );
-    expect(octokitMock.rest.pulls.create).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "chore: update baseline" })
+    fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
+    fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
+
+    await runAction();
+
+    expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/baseline.json", expect.any(String));
+    expect(setOutput).toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("fails when baseline changes are detected on a protected branch", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "main";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true",
+      "baseline-protected-branches": "main"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("Baseline update required but branch")
     );
-    expect(setOutput).toHaveBeenCalledWith("baseline-pr-url", "https://example.com/pr/15");
+  });
+
+  it("fails when baseline changes are detected on a protected branch defined via comma-separated list", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "prod";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true",
+      "baseline-protected-branches": "main,prod"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("Baseline update required but branch")
+    );
+  });
+
+  it("fails when baseline changes are detected on a branch matched by glob pattern", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "release-2025.11";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true",
+      "baseline-protected-branches": "main,release-*"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("Baseline update required but branch")
+    );
+  });
+
+  it("fails when baseline changes are detected on a branch matched by nested glob pattern", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "hotfix/1234";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true",
+      "baseline-protected-branches": "hotfix/*"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("Baseline update required but branch")
+    );
   });
 
   it("defaults baseline-report-path to report-file when updating baseline without explicit path", async () => {
     mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/default-report";
     inputs = {
       "github-token": "token",
       "report-file": "custom-baseline.json",
-      "update-baseline": "true",
-      "baseline-create-pr": "true"
+      "update-baseline": "true"
     };
-    githubContext.payload = { action: "push" };
-    fsMock.readFile.mockResolvedValueOnce("[]");
-    fsMock.readFile.mockResolvedValueOnce("[]");
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
 
     await runAction();
 
@@ -299,9 +407,37 @@ describe("GitHub Action integration", () => {
       "/repo/custom-baseline.json",
       expect.any(String)
     );
-    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "custom-baseline.json" })
-    );
+  });
+
+  it("skips baseline update when update-baseline is false", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/no-update";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "false"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  afterAll(() => {
+    if (originalGithubRefName === undefined) {
+      delete process.env.GITHUB_REF_NAME;
+    } else {
+      process.env.GITHUB_REF_NAME = originalGithubRefName;
+    }
+
+    if (originalGithubRef === undefined) {
+      delete process.env.GITHUB_REF;
+    } else {
+      process.env.GITHUB_REF = originalGithubRef;
+    }
   });
 });
 
