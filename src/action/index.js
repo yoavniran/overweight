@@ -38,12 +38,20 @@ const buildSummaryRows = (results) =>
     error: entry.error || null
   }));
 
-const readBaseline = async (baselinePath) => {
+const readBaselineState = async (baselinePath) => {
   try {
     const raw = await fs.readFile(baselinePath, "utf-8");
-    return JSON.parse(raw);
+    let data = null;
+
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+
+    return { raw, data };
   } catch {
-    return null;
+    return { raw: null, data: null };
   }
 };
 
@@ -68,8 +76,15 @@ const writeBaseline = async (baselinePath, rows, precomputedContent) => {
   await fs.writeFile(baselinePath, content);
 };
 
-const getBaselineUpdateInfo = async (baselinePath, rows) => {
+const getBaselineUpdateInfo = async (baselinePath, rows, previousContent = undefined) => {
   const nextContent = serializeBaselineSnapshot(rows);
+
+  if (previousContent !== undefined) {
+    return {
+      needsUpdate: previousContent === null ? true : previousContent !== nextContent,
+      content: nextContent
+    };
+  }
 
   try {
     const currentContent = await fs.readFile(baselinePath, "utf-8");
@@ -426,7 +441,9 @@ export const runAction = async () => {
     const baselinePath = baselinePathCandidate
       ? path.resolve(config.root, baselinePathCandidate)
       : null;
-    const baselineData = baselinePath ? await readBaseline(baselinePath) : null;
+    const baselineState = baselinePath ? await readBaselineState(baselinePath) : null;
+    const baselineData = baselineState?.data ?? null;
+    const baselineFileContent = baselineState ? baselineState.raw : undefined;
     const summaryRows = mergeWithBaseline(baseRows, baselineData);
     jsonFileReporter(result, {
       reportFile: reportFileInput,
@@ -457,7 +474,11 @@ export const runAction = async () => {
       } else if (!githubToken || !octokit) {
         core.setFailed("update-baseline requires github-token to be provided.");
       } else {
-        const { needsUpdate, content } = await getBaselineUpdateInfo(baselinePath, summaryRows);
+        const { needsUpdate, content } = await getBaselineUpdateInfo(
+          baselinePath,
+          summaryRows,
+          baselineFileContent
+        );
         const currentBranch = getBranchName() || "unknown";
         const protectedPatterns = parseProtectedBranchPatterns(
           core.getInput("baseline-protected-branches")
