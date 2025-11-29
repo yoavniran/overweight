@@ -160,6 +160,13 @@ To allow that flow:
   - Updates the changelog,
   - Publishes to npm,
   - Creates a GitHub release/tag.
+- `.github/workflows/release.yml` exposes a `dry-run` workflow input (defaults to `true`) so manual dispatches preview semantic-release without mutating tags or npm. Set the field to `false` to publish for real, e.g.:
+
+```
+gh workflow run "Overweight Release" \
+  --ref release-main \
+  --field dry-run=false
+```
 
 MIT License © Yoav Niran.
 
