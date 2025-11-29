@@ -427,6 +427,43 @@ describe("GitHub Action integration", () => {
     expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
   });
 
+  it("skips baseline update on default protected branches", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "main";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("skips baseline update when branch matches custom protected patterns", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "release-2025.11";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true",
+      "baseline-protected-branches": "main,release-*"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
   it("fails when update-baseline is true but github-token is missing", async () => {
     mockRunResult.stats.hasFailures = false;
     inputs = {

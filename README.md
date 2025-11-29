@@ -125,7 +125,7 @@ jobs:
 ```
 
 - `report-json`, `report-table`, and `report-file` outputs enable downstream workflows (PR comments, Slack alerts, artifact uploads, etc.).
-- When `baseline-report-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the branch that ran the workflow. If `baseline-report-path` is omitted and `report-file` is set, the baseline defaults to that path. The update runs on a dedicated branch + pull request using `update-pr-title`, `update-pr-body`, and `update-branch-prefix`.
+- When `baseline-report-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the branch that ran the workflow. If `baseline-report-path` is omitted and `report-file` is set, the baseline defaults to that path. The update runs on a dedicated branch + pull request using `update-pr-title`, `update-pr-body`, and `update-branch-prefix`. Use `baseline-protected-branches` (default `main,master`, supports glob patterns) to block updates on protected branches.
 - `comment-on-pr-always` (first run only) and `comment-on-pr-each-run` control when PR comments are posted even if checks pass.
 - Additional outputs (`report-file`, `baseline-updated`, `baseline-update-pr-url`, `baseline-update-pr-number`) make it easy to chain artifact uploads or follow-up workflows.
 
@@ -146,6 +146,7 @@ To allow that flow:
 - Optionally customize `update-pr-title`, `update-pr-body`, and `update-branch-prefix` to fit your repo conventions.
 - In the repository settings go to **Settings → Actions → General → Workflow permissions** and enable **Allow GitHub Actions to create and approve pull requests**, otherwise GitHub will block the auto-PR.
 - Overweight reuses the same update branch/PR per source PR (branch suffix `pr-<number>`), so subsequent pushes to your feature branch simply update the existing baseline PR instead of opening multiples.
+- Use `baseline-protected-branches` to list branches or patterns (comma-separated) where baseline updates are forbidden; the default `main,master` protects the typical default branches.
 - Manual workflows triggered on a feature branch automatically detect the open PR for that branch and reuse its baseline update PR instead of opening a new one.
 - Baseline updates occur only when all size checks pass. Failing runs skip the baseline refresh entirely to avoid locking in broken results.
 

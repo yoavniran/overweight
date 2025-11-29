@@ -33,6 +33,10 @@ inputs:
     description: "When true, commit the updated baseline to a new branch and open a pull request."
     required: false
     default: "false"
+  baseline-protected-branches:
+    description: "Comma-separated list of branch names or glob patterns where baseline updates are forbidden (default: main,master)."
+    required: false
+    default: "main,master"
   update-pr-title:
     description: "Title of the pull request created when update-baseline is true."
     required: false
