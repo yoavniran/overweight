@@ -1,3 +1,5 @@
+# 1.0.1 (2025-11-27)
+
 ## [1.0.1](https://github.com/yoavniran/overweight/compare/v1.0.0...v1.0.1) (2025-11-27)
 
 
