@@ -144,6 +144,7 @@ To allow that flow:
 - Check out the repository with `actions/checkout@v4` (fetch-depth defaults are fine because commits are created via the GitHub API).
 - Pass a `github-token` secret with permission to create branches and PRs in the repository (the default `secrets.GITHUB_TOKEN` works for same-repo PRs).
 - Optionally customize `update-pr-title`, `update-pr-body`, and `update-branch-prefix` to fit your repo conventions.
+- In the repository settings go to **Settings → Actions → General → Workflow permissions** and enable **Allow GitHub Actions to create and approve pull requests**, otherwise GitHub will block the auto-PR.
 
 
 ## Release & contributing
