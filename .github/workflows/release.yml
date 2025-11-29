@@ -45,11 +45,11 @@ jobs:
       - run: pnpm run build
 
       - name: Run semantic-release (dry run)
-        if: ${{ fromJSON(inputs['dry-run'] || 'true') }}
+        if: ${{ !(inputs['dry-run'] == 'false' || inputs['dry-run'] == false) }}
         run: pnpm run release --dry-run
 
       - name: Run semantic-release
-        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
+        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
         run: |
           export NPM_TOKEN="${NODE_AUTH_TOKEN}"
           pnpm run release
