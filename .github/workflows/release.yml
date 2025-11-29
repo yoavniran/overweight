@@ -44,7 +44,7 @@ jobs:
 
       - name: Run semantic-release (dry run)
         if: ${{ fromJSON(inputs['dry-run'] || 'true') }}
-        run: pnpm run release -- --dry-run
+        run: pnpm run release --dry-run
 
       - name: Run semantic-release
         if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
