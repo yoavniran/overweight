@@ -25,9 +25,7 @@ inputs:
   comment-on-pr-each-run:
     description: "Comment on every PR run regardless of the result."
     required: false
-    default: "false"
-  baseline-report-path:
-    description: "Optional path to a JSON file with baseline results. Defaults to `report-file` when omitted and `update-baseline` is true."
+    default: "false"  
   baseline-report-path:
     description: "Optional path to a JSON file with baseline results. Defaults to `report-file` when omitted and `update-baseline` is true."
     required: false
