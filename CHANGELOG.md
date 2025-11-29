@@ -1,5 +1,20 @@
 # 1.0.1 (2025-11-27)
 
+# 1.0.0 (2025-11-29)
+
+
+### Bug Fixes
+
+* Fix release flow ([#3](https://github.com/yoavniran/overweight/issues/3)) ([0ce471a](https://github.com/yoavniran/overweight/commit/0ce471a3713fc5c19a6a14949ffb3d04fa679809))
+
+
+### Features
+
+* enhance release workflow with dry-run option ([adf8db4](https://github.com/yoavniran/overweight/commit/adf8db43de6ffe65d41d3bb346223caf232ccee5))
+* improvements across the board ([e18032c](https://github.com/yoavniran/overweight/commit/e18032c52b11e38c0d71141a6f16e400d4c24497))
+* overhaull action PR behavior ([42fb59e](https://github.com/yoavniran/overweight/commit/42fb59e3c647926cdcace229e7669153d19070b0))
+* protected branch exclude from update PR ([#17](https://github.com/yoavniran/overweight/issues/17)) ([05d34c1](https://github.com/yoavniran/overweight/commit/05d34c1e200baab489fe30e5ae112d25a0f369ab))
+
 ## [1.0.1](https://github.com/yoavniran/overweight/compare/v1.0.0...v1.0.1) (2025-11-27)
 
 
