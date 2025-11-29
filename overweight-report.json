@@ -3,8 +3,8 @@
     "label": "dist-action",
     "file": "dist/action/index.js",
     "tester": "raw",
-    "size": "28.9 kB",
-    "sizeBytes": 28923,
+    "size": "29.4 kB",
+    "sizeBytes": 29443,
     "limit": "30 kB",
     "limitBytes": 30000
   },
