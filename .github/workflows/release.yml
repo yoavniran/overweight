@@ -60,6 +60,11 @@ jobs:
       - name: Run semantic-release (dry run)
         id: semantic_release_dry_run
         if: ${{ !(inputs['dry-run'] == 'false' || inputs['dry-run'] == false) }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           pnpm run release --dry-run 2>&1 | tee sr.log
@@ -72,6 +77,11 @@ jobs:
       - name: Run semantic-release
         id: semantic_release
         if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           export NPM_TOKEN="${NODE_AUTH_TOKEN}"
           set -euo pipefail
