@@ -59,7 +59,7 @@ jobs:
 
       - name: Run semantic-release (dry run)
         id: semantic_release_dry_run
-        if: ${{ !(inputs['dry-run'] == 'false' || inputs['dry-run'] == false) }}
+        if: ${{ fromJSON(inputs['dry-run'] || 'true') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -76,7 +76,7 @@ jobs:
 
       - name: Run semantic-release
         id: semantic_release
-        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
+        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -93,7 +93,7 @@ jobs:
           echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update major release tag
-        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
+        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.semantic_release.outputs.next_version }}"
@@ -104,19 +104,19 @@ jobs:
           git push origin "${MAJOR_TAG}" --force
 
       - name: Publish summary (release)
-        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
+        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
         run: |
           VERSION="${{ steps.semantic_release.outputs.next_version }}"
           echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Sync release commit back to main
-        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
+        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
         run: |
           set -euo pipefail
           git push origin HEAD:main
 
       - name: Publish summary (dry run)
-        if: ${{ !(inputs['dry-run'] == 'false' || inputs['dry-run'] == false) }}
+        if: ${{ fromJSON(inputs['dry-run'] || 'true') }}
         run: |
           VERSION="${{ steps.semantic_release_dry_run.outputs.next_version }}"
           echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
