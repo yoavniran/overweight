@@ -54,3 +54,23 @@ jobs:
           export NPM_TOKEN="${NODE_AUTH_TOKEN}"
           pnpm run release
 
+      - name: Update major release tag
+        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          MAJOR_TAG="v${VERSION%%.*}"
+          FULL_TAG="v${VERSION}"
+          git fetch --tags origin
+          git tag -f "${MAJOR_TAG}" "${FULL_TAG}"
+          git push origin "${MAJOR_TAG}" --force
+
+      - name: Publish summary
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }} ]]; then
+            echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+

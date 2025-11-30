@@ -160,6 +160,7 @@ To allow that flow:
   - Updates the changelog,
   - Publishes to npm,
   - Creates a GitHub release/tag.
+- After each non-dry release run the workflow force-updates a moving major tag (e.g. `v1`) so consumers can reference `yoavniran/overweight@v1` for the latest release in that major line.
 - `.github/workflows/release.yml` exposes a `dry-run` workflow input (defaults to `true`) so manual dispatches preview semantic-release without mutating tags or npm. Set the field to `false` to publish for real, e.g.:
 
 ```
