@@ -11,3 +11,4 @@ If needed, use line break after the header and a short message with some details
 Never exceed 100 characters per line in any part of the message - body's lines must not be longer than 100 characters [body-max-line-length]
 
 always choose a conventional commit verb that will map to either major or minor or patch. unless somehow the commit doesnt contain anything that is relevant to the outside (code change or docs change), each commit should translate to a new version 
+however, for any changes in workflows that dont affect users of the library then never use a verb that will cause a version change. use 'chore' or 'refactor'
