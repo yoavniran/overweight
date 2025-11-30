@@ -33,6 +33,11 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+      - name: Ensure release branch is up to date
+        run: |
+            set -euo pipefail
+            git fetch origin main --tags --prune
+            git merge --ff-only origin/main
       - uses: pnpm/action-setup@v3
         with:
           version: 9
@@ -65,12 +70,21 @@ jobs:
           git tag -f "${MAJOR_TAG}" "${FULL_TAG}"
           git push origin "${MAJOR_TAG}" --force
 
-      - name: Publish summary
+      - name: Publish summary (release)
+        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          if [[ ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }} ]]; then
-            echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Sync release commit back to main
+        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main
+
+      - name: Publish summary (dry run)
+        if: ${{ !(inputs['dry-run'] == 'false' || inputs['dry-run'] == false) }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
 
