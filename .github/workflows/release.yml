@@ -53,13 +53,29 @@ jobs:
         with:
           node-version: 22.14.0
           cache: pnpm
+      - name: Determine dry run flag
+        id: dryrun
+        run: |
+          set -euo pipefail
+          value="${INPUT_DRY_RUN}"
+          value="${value,,}"
+          if [ -z "$value" ]; then
+            value="true"
+          fi
+          if [ "$value" != "true" ] && [ "$value" != "false" ]; then
+            echo "::warning::Unknown dry-run input '$value', defaulting to true"
+            value="true"
+          fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_DRY_RUN: ${{ inputs['dry-run'] }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test
       - run: pnpm run build
 
       - name: Run semantic-release (dry run)
         id: semantic_release_dry_run
-        if: ${{ fromJSON(inputs['dry-run'] || 'true') }}
+        if: ${{ steps.dryrun.outputs.value == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -76,7 +92,7 @@ jobs:
 
       - name: Run semantic-release
         id: semantic_release
-        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -93,7 +109,7 @@ jobs:
           echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update major release tag
-        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.semantic_release.outputs.next_version }}"
@@ -104,19 +120,19 @@ jobs:
           git push origin "${MAJOR_TAG}" --force
 
       - name: Publish summary (release)
-        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
         run: |
           VERSION="${{ steps.semantic_release.outputs.next_version }}"
           echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Sync release commit back to main
-        if: ${{ !fromJSON(inputs['dry-run'] || 'true') }}
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
         run: |
           set -euo pipefail
           git push origin HEAD:main
 
       - name: Publish summary (dry run)
-        if: ${{ fromJSON(inputs['dry-run'] || 'true') }}
+        if: ${{ steps.dryrun.outputs.value == 'true' }}
         run: |
           VERSION="${{ steps.semantic_release_dry_run.outputs.next_version }}"
           echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
