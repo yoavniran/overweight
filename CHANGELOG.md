@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/yoavniran/overweight/compare/v1.1.0...v1.2.0) (2025-11-30)
+
+
+### Features
+
+* enhance release workflow to update major version tag ([#26](https://github.com/yoavniran/overweight/issues/26)) ([21e2421](https://github.com/yoavniran/overweight/commit/21e24211c06dc86e42678a597475b7405aee1e7a))
+
 # [1.1.0](https://github.com/yoavniran/overweight/compare/v1.0.1...v1.1.0) (2025-11-29)
 
 

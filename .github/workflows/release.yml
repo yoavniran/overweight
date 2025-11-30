@@ -24,15 +24,28 @@ jobs:
     environment: "release"
     if: startsWith(github.ref, 'refs/heads/release-')
     runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
+      - name: Ensure release branch is up to date
+        run: |
+            set -euo pipefail
+            git fetch origin main --tags --prune
+            git merge --ff-only origin/main
+
+      - name: Ensure latest tag is in history
+        run: |
+            set -euo pipefail
+            LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)
+            if [ -n "$LATEST_TAG" ]; then
+                echo "Latest tag is $LATEST_TAG. Creating temporary merge to include it."
+                git config user.name "Overweight Bot"
+                git config user.email "ci-bot@overweight-gh-action.com"
+                git merge --no-edit --no-commit "$LATEST_TAG" || true
+                git reset --hard HEAD
+            fi
       - uses: pnpm/action-setup@v3
         with:
           version: 9
@@ -40,37 +53,107 @@ jobs:
         with:
           node-version: 22.14.0
           cache: pnpm
+      - name: Determine dry run flag
+        id: dryrun
+        run: |
+          set -euo pipefail
+          value="${INPUT_DRY_RUN}"
+          value="${value,,}"
+          if [ -z "$value" ]; then
+            value="true"
+          fi
+          if [ "$value" != "true" ] && [ "$value" != "false" ]; then
+            echo "::warning::Unknown dry-run input '$value', defaulting to true"
+            value="true"
+          fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_DRY_RUN: ${{ inputs['dry-run'] }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test
       - run: pnpm run build
 
       - name: Run semantic-release (dry run)
-        if: ${{ !(inputs['dry-run'] == 'false' || inputs['dry-run'] == false) }}
-        run: pnpm run release --dry-run
-
-      - name: Run semantic-release
-        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
-        run: |
-          export NPM_TOKEN="${NODE_AUTH_TOKEN}"
-          pnpm run release
-
-      - name: Update major release tag
-        if: ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }}
+        id: semantic_release_dry_run
+        if: ${{ steps.dryrun.outputs.value == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
+          pnpm run release --dry-run 2>&1 | tee sr.log
+          VERSION=$(perl -ne 'print "$1\n" if /The next release version is ([0-9]+\.[0-9]+\.[0-9]+)/' sr.log | tail -n 1)
+          if [ -z "$VERSION" ]; then
+            VERSION="unknown"
+          fi
+          echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Run semantic-release
+        id: semantic_release
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          export NPM_TOKEN="${NODE_AUTH_TOKEN}"
+          set -euo pipefail
+          pnpm run release 2>&1 | tee sr.log
+          VERSION=$(perl -ne 'print "$1\n" if /The next release version is ([0-9]+\.[0-9]+\.[0-9]+)/' sr.log | tail -n 1)
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Update major release tag
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.semantic_release.outputs.next_version }}"
           MAJOR_TAG="v${VERSION%%.*}"
           FULL_TAG="v${VERSION}"
           git fetch --tags origin
           git tag -f "${MAJOR_TAG}" "${FULL_TAG}"
           git push origin "${MAJOR_TAG}" --force
 
-      - name: Publish summary
+      - name: Publish summary (release)
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if [[ ${{ inputs['dry-run'] == 'false' || inputs['dry-run'] == false }} ]]; then
-            echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
+          VERSION="${{ steps.semantic_release.outputs.next_version }}"
+          echo "Released **v${VERSION}** (major alias updated to v${VERSION%%.*})." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish summary (dry run)
+        if: ${{ steps.dryrun.outputs.value == 'true' }}
+        run: |
+          VERSION="${{ steps.semantic_release_dry_run.outputs.next_version }}"
+          echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ensure release PR targets main
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BASE_BRANCH="main"
+          HEAD_BRANCH="${GITHUB_REF_NAME}"
+          VERSION="${{ steps.semantic_release.outputs.next_version }}"
+          PR_URL=$(gh pr list --state open --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --json url --jq '.[0].url' || true)
+          if [ -z "$PR_URL" ]; then
+            TITLE="chore: merge release v${VERSION} into ${BASE_BRANCH}"
+            BODY="Automated PR generated after releasing v${VERSION}. This keeps ${BASE_BRANCH} aligned with ${HEAD_BRANCH}."
+            PR_URL=$(gh pr create --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --title "$TITLE" --body "$BODY")
+            echo "Created PR ${PR_URL}"
           else
-            echo "Dry run preview completed for version **v${VERSION}** (no tags or packages published)." >> "$GITHUB_STEP_SUMMARY"
+            echo "Reusing existing PR ${PR_URL}"
+          fi
+          if [ -n "$PR_URL" ]; then
+            if gh pr merge "$PR_URL" --merge --auto >/dev/null 2>&1; then
+              echo "Auto-merge enabled on ${PR_URL}"
+            else
+              echo "Auto-merge could not be enabled automatically (check branch protections)."
+            fi
           fi
 
