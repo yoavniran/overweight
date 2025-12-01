@@ -1,3 +1,15 @@
+# [1.3.0](https://github.com/yoavniran/overweight/compare/v1.2.1...v1.3.0) (2025-12-01)
+
+
+### Bug Fixes
+
+* include everything in action dist ([21815ff](https://github.com/yoavniran/overweight/commit/21815ffc9ae0eb3fa73f9cd4cf9995f154121d10))
+
+
+### Features
+
+* build target node20 ([21f5643](https://github.com/yoavniran/overweight/commit/21f5643d1872c0b68415b6398da538d35ee8b2fc))
+
 ## [1.2.1](https://github.com/yoavniran/overweight/compare/v1.2.0...v1.2.1) (2025-11-30)
 
 
