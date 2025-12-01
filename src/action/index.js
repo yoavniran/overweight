@@ -297,15 +297,46 @@ const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => 
       sha: baseSha
     });
     core.info(`Successfully created branch ${branchName}`);
-    return false;
   } catch (error) {
     if (error.status === 422) {
-      core.info(`Branch ${branchName} already exists (422), reusing it.`);
-      return true;
+      core.info(`Branch ${branchName} already exists (422), verifying it's accessible...`);
+    } else {
+      core.warning(`Failed to create branch ${branchName}: ${error.message} (status: ${error.status})`);
+      throw error;
     }
-    core.warning(`Failed to create branch ${branchName}: ${error.message} (status: ${error.status})`);
-    throw error;
   }
+
+  // Verify the branch is accessible by retrying getRef with exponential backoff
+  core.info(`Verifying branch ${branchName} is accessible...`);
+  const maxRetries = 5;
+  const baseDelay = 500; // 500ms
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const branchRef = await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: `heads/${branchName}`
+      });
+      const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
+      core.info(`Branch ${branchName} verified and accessible at SHA: ${branchSha}`);
+      return true;
+    } catch (error) {
+      if (error.status === 404) {
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          core.info(`Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          core.warning(`Branch ${branchName} still not accessible after ${maxRetries} attempts`);
+          throw new Error(`Branch ${branchName} was created but is not accessible after multiple retries`);
+        }
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return true;
 };
 
 const getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
@@ -613,31 +644,13 @@ export const runAction = async () => {
           const fileContentBase64 = Buffer.from(content, "utf-8").toString("base64");
           core.info(`Attempting to update file ${repoRelativePath} on branch ${updateBranchName}${existingFileSha ? ` (existing SHA: ${existingFileSha})` : " (new file)"}...`);
 
-          try {
-            await octokit.rest.repos.createOrUpdateFileContents({
-              owner: github.context.repo.owner,
-              repo: github.context.repo.repo,
-              path: repoRelativePath,
-              message: prTitle,
-              content: fileContentBase64,
-              branch: updateBranchName,
-              sha: existingFileSha,
-              committer: BOT_COMMIT_IDENTITY,
-              author: BOT_COMMIT_IDENTITY
-            });
-            core.info(`Successfully updated file ${repoRelativePath} on branch ${updateBranchName}`);
-          } catch (error) {
-            if (error.status === 404) {
-              core.warning(
-                `Branch ${updateBranchName} not found when updating file (${error.message || "404 error"}). Attempting to recreate branch.`
-              );
-              core.info(`Recreating branch ${updateBranchName} from ${baseBranch}...`);
-              await ensureUpdateBranchExists({
-                octokit,
-                branchName: updateBranchName,
-                baseBranch
-              });
-              core.info(`Retrying file update on branch ${updateBranchName} (as new file)...`);
+          // Retry file update with exponential backoff if branch not found
+          const maxRetries = 5;
+          const baseDelay = 1000; // 1 second
+          let lastError = null;
+
+          for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
               await octokit.rest.repos.createOrUpdateFileContents({
                 owner: github.context.repo.owner,
                 repo: github.context.repo.repo,
@@ -645,18 +658,38 @@ export const runAction = async () => {
                 message: prTitle,
                 content: fileContentBase64,
                 branch: updateBranchName,
-                sha: undefined,
+                sha: existingFileSha,
                 committer: BOT_COMMIT_IDENTITY,
                 author: BOT_COMMIT_IDENTITY
               });
-              core.info(`Successfully created file ${repoRelativePath} on recreated branch ${updateBranchName}`);
-            } else {
-              core.warning(`Failed to update file ${repoRelativePath} on branch ${updateBranchName}: ${error.message} (status: ${error.status})`);
-              throw error;
+              core.info(`Successfully updated file ${repoRelativePath} on branch ${updateBranchName}`);
+              lastError = null;
+              break;
+            } catch (error) {
+              lastError = error;
+              if (error.status === 404 && error.message?.includes("Branch") && attempt < maxRetries - 1) {
+                const delay = baseDelay * Math.pow(2, attempt);
+                core.warning(
+                  `Branch ${updateBranchName} not found when updating file (attempt ${attempt + 1}/${maxRetries}). Verifying branch and retrying in ${delay}ms...`
+                );
+                // Verify branch exists before retrying
+                await ensureUpdateBranchExists({
+                  octokit,
+                  branchName: updateBranchName,
+                  baseBranch
+                });
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              } else {
+                throw error;
+              }
             }
           }
 
-          core.info(`Checking for existing PR for branch ${updateBranchName}...`);
+          if (lastError) {
+            core.warning(`Failed to update file after ${maxRetries} attempts: ${lastError.message}`);
+            throw lastError;
+          }
+
           let baselinePr =
             (await findExistingBaselinePr({ octokit, branchName: updateBranchName })) || null;
 

@@ -828,15 +828,16 @@ describe("GitHub Action integration", () => {
       const createRefError = new Error("Reference already exists");
       createRefError.status = 422;
       octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
-        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } });
+        .mockRejectedValueOnce(createNotFoundError()) // Initial check - branch doesn't exist
+        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }) // Get base branch
+        .mockResolvedValueOnce({ data: { object: { sha: "branch-sha" } } }); // Verification after 422
       octokitMock.rest.git.createRef.mockRejectedValueOnce(createRefError);
 
       await runAction();
 
       expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
       expect(info).toHaveBeenCalledWith(
-        expect.stringContaining("Branch overweight/baseline/pr-7 already exists (422), reusing it")
+        expect.stringContaining("Branch overweight/baseline/pr-7 already exists (422), verifying it's accessible")
       );
       expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalled();
     });
@@ -969,6 +970,163 @@ describe("GitHub Action integration", () => {
       );
       expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
       expect(setFailed).not.toHaveBeenCalled();
+    });
+
+    it("handles branch verification retry with multiple 404s before success", async () => {
+      vi.useFakeTimers();
+      mockRunResult.stats.hasFailures = false;
+      process.env.GITHUB_REF_NAME = "feature/verification-retry";
+      inputs = {
+        "github-token": "token",
+        "baseline-report-path": "baseline.json",
+        "update-baseline": "true"
+      };
+      fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+      const createRefError = new Error("Reference already exists");
+      createRefError.status = 422;
+      
+      // Initial check - branch doesn't exist
+      octokitMock.rest.git.getRef
+        .mockRejectedValueOnce(createNotFoundError())
+        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }); // Get base branch
+      
+      octokitMock.rest.git.createRef.mockRejectedValueOnce(createRefError);
+      
+      // Verification retries: first 2 attempts fail with 404, then succeeds
+      octokitMock.rest.git.getRef
+        .mockRejectedValueOnce(createNotFoundError()) // Attempt 1: 404
+        .mockRejectedValueOnce(createNotFoundError()) // Attempt 2: 404
+        .mockResolvedValueOnce({ data: { object: { sha: "branch-sha" } } }); // Attempt 3: success
+      
+      octokitMock.rest.repos.getContent.mockRejectedValueOnce(createNotFoundError());
+      octokitMock.rest.repos.createOrUpdateFileContents.mockResolvedValueOnce({});
+
+      const actionPromise = runAction();
+      
+      // Fast-forward through delays: 500ms, 1000ms
+      await vi.advanceTimersByTimeAsync(2000);
+      
+      await actionPromise;
+      vi.useRealTimers();
+
+      expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
+      expect(info).toHaveBeenCalledWith(
+        expect.stringContaining("Branch overweight/baseline/pr-7 already exists (422), verifying it's accessible")
+      );
+      expect(info).toHaveBeenCalledWith(
+        expect.stringContaining("Branch overweight/baseline/pr-7 not yet accessible (404), retrying")
+      );
+      expect(info).toHaveBeenCalledWith(
+        expect.stringContaining("Branch overweight/baseline/pr-7 verified and accessible")
+      );
+      expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalled();
+    });
+
+    it("handles file update retry with multiple 404s and branch verification", async () => {
+      vi.useFakeTimers();
+      mockRunResult.stats.hasFailures = false;
+      process.env.GITHUB_REF_NAME = "feature/file-update-retry";
+      githubContext.payload = {
+        action: "opened",
+        pull_request: {
+          number: 929,
+          head: { repo: { full_name: "owner/repo" } },
+          base: { repo: { full_name: "owner/repo" }, ref: "master" }
+        }
+      };
+      inputs = {
+        "github-token": "token",
+        "baseline-report-path": "baseline.json",
+        "update-baseline": "true"
+      };
+      fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+      
+      // Initial branch check succeeds
+      octokitMock.rest.git.getRef
+        .mockResolvedValueOnce({ data: { object: { sha: "existing-branch-sha" } } });
+      
+      octokitMock.rest.repos.getContent.mockRejectedValueOnce(createNotFoundError());
+      
+      // File update fails with 404 multiple times, then succeeds
+      const branchNotFoundError = new Error("Branch overweight/baseline/pr-929 not found");
+      branchNotFoundError.status = 404;
+      
+      octokitMock.rest.repos.createOrUpdateFileContents
+        .mockRejectedValueOnce(branchNotFoundError) // Attempt 1: 404
+        .mockRejectedValueOnce(branchNotFoundError); // Attempt 2: 404 (after verification)
+      
+      // After first 404, verify branch (succeeds immediately)
+      octokitMock.rest.git.getRef
+        .mockResolvedValueOnce({ data: { object: { sha: "branch-sha" } } });
+      
+      // After second 404, verify branch again (succeeds immediately)
+      octokitMock.rest.git.getRef
+        .mockResolvedValueOnce({ data: { object: { sha: "branch-sha" } } });
+      
+      // Third attempt succeeds
+      octokitMock.rest.repos.createOrUpdateFileContents.mockResolvedValueOnce({});
+
+      const actionPromise = runAction();
+      
+      // Fast-forward through delays: 1000ms + 2000ms
+      await vi.advanceTimersByTimeAsync(3000);
+      
+      await actionPromise;
+      vi.useRealTimers();
+
+      expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledTimes(3);
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("Branch overweight/baseline/pr-929 not found when updating file")
+      );
+      expect(info).toHaveBeenCalledWith(
+        expect.stringContaining("Successfully updated file")
+      );
+      expect(setFailed).not.toHaveBeenCalled();
+    });
+
+    it("fails after max retries if branch verification never succeeds", async () => {
+      vi.useFakeTimers();
+      mockRunResult.stats.hasFailures = false;
+      process.env.GITHUB_REF_NAME = "feature/max-retries-fail";
+      inputs = {
+        "github-token": "token",
+        "baseline-report-path": "baseline.json",
+        "update-baseline": "true"
+      };
+      fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+      const createRefError = new Error("Reference already exists");
+      createRefError.status = 422;
+      
+      // Initial check - branch doesn't exist
+      octokitMock.rest.git.getRef
+        .mockRejectedValueOnce(createNotFoundError())
+        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }); // Get base branch
+      
+      octokitMock.rest.git.createRef.mockRejectedValueOnce(createRefError);
+      
+      // Verification retries: all 5 attempts fail with 404
+      octokitMock.rest.git.getRef
+        .mockRejectedValueOnce(createNotFoundError()) // Attempt 1
+        .mockRejectedValueOnce(createNotFoundError()) // Attempt 2
+        .mockRejectedValueOnce(createNotFoundError()) // Attempt 3
+        .mockRejectedValueOnce(createNotFoundError()) // Attempt 4
+        .mockRejectedValueOnce(createNotFoundError()); // Attempt 5 (final)
+
+      const actionPromise = runAction();
+      
+      // Fast-forward through all delays: 500ms + 1000ms + 2000ms + 4000ms + 8000ms = 15500ms
+      await vi.advanceTimersByTimeAsync(16000);
+      
+      await actionPromise;
+      vi.useRealTimers();
+
+      expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("Branch overweight/baseline/pr-7 still not accessible after 5 attempts")
+      );
+      expect(setFailed).toHaveBeenCalledWith(
+        expect.stringContaining("was created but is not accessible after multiple retries")
+      );
     });
   });
 
