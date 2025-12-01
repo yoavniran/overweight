@@ -169,5 +169,21 @@ gh workflow run "Overweight Release" \
   --field dry-run=false
 ```
 
+### Syncing tags
+
+Since the release workflow force-updates major tags (e.g., `v1`), when syncing your local repository you may encounter tag conflicts. To sync tags properly:
+
+```sh
+# Option 1: Force-update all tags from remote
+git fetch --tags --force
+
+# Option 2: Delete conflicting tag and re-fetch
+git tag -d v1 && git fetch origin tag v1
+
+# Option 3: Pull with force-updated tags
+git pull --tags --force
+```
+
+
 MIT License © Yoav Niran.
 
