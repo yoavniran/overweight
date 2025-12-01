@@ -42510,42 +42510,53 @@ var resolveBaseBranch = async (octokit) => {
 };
 var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
   const { owner, repo } = import_github.default.context.repo;
+  import_core8.default.info(`Checking if branch ${branchName} exists...`);
   try {
-    await octokit.rest.git.getRef({
+    const branchRef = await octokit.rest.git.getRef({
       owner,
       repo,
       ref: `heads/${branchName}`
     });
+    const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
+    import_core8.default.info(`Branch ${branchName} already exists at SHA: ${branchSha}`);
     return true;
   } catch (error46) {
     if (error46.status !== 404) {
+      import_core8.default.warning(`Failed to check if branch ${branchName} exists: ${error46.message}`);
       throw error46;
     }
+    import_core8.default.info(`Branch ${branchName} does not exist (404), will create it from ${baseBranch}`);
   }
+  import_core8.default.info(`Fetching base branch ${baseBranch} to create ${branchName}...`);
   const baseRef = await octokit.rest.git.getRef({
     owner,
     repo,
     ref: `heads/${baseBranch}`
   });
   const baseSha = baseRef.data.object?.sha || baseRef.data.sha;
+  import_core8.default.info(`Base branch ${baseBranch} SHA: ${baseSha}`);
   try {
+    import_core8.default.info(`Creating branch ${branchName} from ${baseBranch} (${baseSha})...`);
     await octokit.rest.git.createRef({
       owner,
       repo,
       ref: `refs/heads/${branchName}`,
       sha: baseSha
     });
+    import_core8.default.info(`Successfully created branch ${branchName}`);
     return false;
   } catch (error46) {
     if (error46.status === 422) {
-      import_core8.default.info(`Branch ${branchName} already exists, reusing it.`);
+      import_core8.default.info(`Branch ${branchName} already exists (422), reusing it.`);
       return true;
     }
+    import_core8.default.warning(`Failed to create branch ${branchName}: ${error46.message} (status: ${error46.status})`);
     throw error46;
   }
 };
 var getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
   const { owner, repo } = import_github.default.context.repo;
+  import_core8.default.info(`Checking for existing file ${repoPath} on branch ${branchName}...`);
   try {
     const response = await octokit.rest.repos.getContent({
       owner,
@@ -42554,18 +42565,23 @@ var getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
       ref: branchName
     });
     if (!Array.isArray(response.data) && response.data.type === "file") {
+      import_core8.default.info(`Found existing file ${repoPath} on branch ${branchName} with SHA: ${response.data.sha}`);
       return response.data.sha;
     }
+    import_core8.default.info(`File ${repoPath} exists on branch ${branchName} but is not a file (type: ${response.data?.type || "unknown"})`);
     return void 0;
   } catch (error46) {
     if (error46.status === 404) {
+      import_core8.default.info(`File ${repoPath} does not exist on branch ${branchName} (404), will create new file`);
       return void 0;
     }
+    import_core8.default.warning(`Failed to check for existing file ${repoPath} on branch ${branchName}: ${error46.message} (status: ${error46.status})`);
     throw error46;
   }
 };
 var findExistingBaselinePr = async ({ octokit, branchName }) => {
   const { owner, repo } = import_github.default.context.repo;
+  import_core8.default.info(`Searching for existing open PRs for branch ${branchName}...`);
   const prs = await octokit.rest.pulls.list({
     owner,
     repo,
@@ -42573,10 +42589,17 @@ var findExistingBaselinePr = async ({ octokit, branchName }) => {
     state: "open",
     per_page: 1
   });
-  return prs.data?.[0] || null;
+  const existingPr = prs.data?.[0] || null;
+  if (existingPr) {
+    import_core8.default.info(`Found existing PR #${existingPr.number} for branch ${branchName}: ${existingPr.html_url}`);
+  } else {
+    import_core8.default.info(`No existing open PR found for branch ${branchName}`);
+  }
+  return existingPr;
 };
 var findPrNumberForBranch = async ({ octokit, branch }) => {
   const { owner, repo } = import_github.default.context.repo;
+  import_core8.default.info(`Searching for PR number for branch ${branch}...`);
   const prs = await octokit.rest.pulls.list({
     owner,
     repo,
@@ -42585,6 +42608,11 @@ var findPrNumberForBranch = async ({ octokit, branch }) => {
     per_page: 1
   });
   const pr = prs.data?.[0];
+  if (pr) {
+    import_core8.default.info(`Found PR #${pr.number} for branch ${branch}`);
+  } else {
+    import_core8.default.info(`No open PR found for branch ${branch}`);
+  }
   return pr?.number ?? null;
 };
 var resolveConfig = async () => {
@@ -42701,6 +42729,7 @@ var runAction = async () => {
       } else if (!githubToken || !octokit) {
         import_core8.default.setFailed("update-baseline requires github-token to be provided.");
       } else {
+        import_core8.default.info(`Checking if baseline update is needed for ${baselinePath}...`);
         const { needsUpdate, content } = await getBaselineUpdateInfo(
           baselinePath,
           summaryRows,
@@ -42712,7 +42741,7 @@ var runAction = async () => {
         );
         const branchIsProtected = isBranchProtected(currentBranch, protectedPatterns);
         import_core8.default.info(
-          `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate})`
+          `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate}, protected=${branchIsProtected})`
         );
         if (!needsUpdate) {
           import_core8.default.info("Baseline is already up to date; no changes written.");
@@ -42721,11 +42750,14 @@ var runAction = async () => {
             `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
           );
         } else {
+          import_core8.default.info("Resolving base branch for baseline update...");
           const baseBranch = await resolveBaseBranch(octokit);
+          import_core8.default.info(`Resolved base branch: ${baseBranch}`);
           const prTitleInput = import_core8.default.getInput("update-pr-title") || "chore: update baseline report";
           const prTitle = `${prTitleInput} (\u{1F9F3} Overweight Guard)`;
           const prBody = import_core8.default.getInput("update-pr-body") || "Automatic pull request updating the baseline report.";
           const branchPrefix = import_core8.default.getInput("update-branch-prefix") || "overweight/baseline";
+          import_core8.default.info(`Determining PR identifier for branch ${currentBranch}...`);
           let prIdentifier = import_github.default.context.payload.pull_request?.number ?? null;
           if (!prIdentifier) {
             try {
@@ -42747,6 +42779,8 @@ var runAction = async () => {
             currentBranch
           });
           const repoRelativePath = ensureRelativePath(baselinePath);
+          import_core8.default.info(`Preparing to update baseline on branch: ${updateBranchName} (base: ${baseBranch})`);
+          import_core8.default.info(`Baseline file path: ${repoRelativePath}`);
           await ensureUpdateBranchExists({
             octokit,
             branchName: updateBranchName,
@@ -42758,20 +42792,56 @@ var runAction = async () => {
             path: repoRelativePath
           });
           await writeBaseline(baselinePath, summaryRows, content);
-          import_core8.default.info(`Wrote updated baseline snapshot to ${baselinePath}`);
-          await octokit.rest.repos.createOrUpdateFileContents({
-            owner: import_github.default.context.repo.owner,
-            repo: import_github.default.context.repo.repo,
-            path: repoRelativePath,
-            message: prTitle,
-            content: Buffer$1.from(content, "utf-8").toString("base64"),
-            branch: updateBranchName,
-            sha: existingFileSha,
-            committer: BOT_COMMIT_IDENTITY,
-            author: BOT_COMMIT_IDENTITY
-          });
+          import_core8.default.info(`Wrote updated baseline snapshot to ${baselinePath} (${content.length} bytes)`);
+          const fileContentBase64 = Buffer$1.from(content, "utf-8").toString("base64");
+          import_core8.default.info(`Attempting to update file ${repoRelativePath} on branch ${updateBranchName}${existingFileSha ? ` (existing SHA: ${existingFileSha})` : " (new file)"}...`);
+          try {
+            await octokit.rest.repos.createOrUpdateFileContents({
+              owner: import_github.default.context.repo.owner,
+              repo: import_github.default.context.repo.repo,
+              path: repoRelativePath,
+              message: prTitle,
+              content: fileContentBase64,
+              branch: updateBranchName,
+              sha: existingFileSha,
+              committer: BOT_COMMIT_IDENTITY,
+              author: BOT_COMMIT_IDENTITY
+            });
+            import_core8.default.info(`Successfully updated file ${repoRelativePath} on branch ${updateBranchName}`);
+          } catch (error46) {
+            if (error46.status === 404) {
+              import_core8.default.warning(
+                `Branch ${updateBranchName} not found when updating file (${error46.message || "404 error"}). Attempting to recreate branch.`
+              );
+              import_core8.default.info(`Recreating branch ${updateBranchName} from ${baseBranch}...`);
+              await ensureUpdateBranchExists({
+                octokit,
+                branchName: updateBranchName,
+                baseBranch
+              });
+              import_core8.default.info(`Retrying file update on branch ${updateBranchName} (as new file)...`);
+              await octokit.rest.repos.createOrUpdateFileContents({
+                owner: import_github.default.context.repo.owner,
+                repo: import_github.default.context.repo.repo,
+                path: repoRelativePath,
+                message: prTitle,
+                content: fileContentBase64,
+                branch: updateBranchName,
+                sha: void 0,
+                committer: BOT_COMMIT_IDENTITY,
+                author: BOT_COMMIT_IDENTITY
+              });
+              import_core8.default.info(`Successfully created file ${repoRelativePath} on recreated branch ${updateBranchName}`);
+            } else {
+              import_core8.default.warning(`Failed to update file ${repoRelativePath} on branch ${updateBranchName}: ${error46.message} (status: ${error46.status})`);
+              throw error46;
+            }
+          }
+          import_core8.default.info(`Checking for existing PR for branch ${updateBranchName}...`);
           let baselinePr = await findExistingBaselinePr({ octokit, branchName: updateBranchName }) || null;
           if (!baselinePr) {
+            import_core8.default.info(`No existing PR found for branch ${updateBranchName}, creating new PR...`);
+            import_core8.default.info(`PR details: head=${updateBranchName}, base=${baseBranch}, title="${prTitle}"`);
             const prResponse = await octokit.rest.pulls.create({
               owner: import_github.default.context.repo.owner,
               repo: import_github.default.context.repo.repo,
@@ -42781,7 +42851,7 @@ var runAction = async () => {
               body: prBody
             });
             baselinePr = prResponse.data;
-            import_core8.default.info(`Opened baseline update PR #${baselinePr.number} (${baselinePr.html_url})`);
+            import_core8.default.info(`Created baseline update PR #${baselinePr.number}: ${baselinePr.html_url}`);
           } else {
             import_core8.default.info(
               `Updated existing baseline PR #${baselinePr.number} (${baselinePr.html_url})`
@@ -42817,6 +42887,16 @@ ${htmlTable}`,
       import_core8.default.setFailed("One or more size checks failed.");
     }
   } catch (error46) {
+    import_core8.default.warning(`Action failed with error: ${error46.message}`);
+    if (error46.status) {
+      import_core8.default.warning(`HTTP status: ${error46.status}`);
+    }
+    if (error46.response) {
+      import_core8.default.warning(`Error response: ${JSON.stringify(error46.response.data || error46.response)}`);
+    }
+    if (error46.stack) {
+      import_core8.default.warning(`Stack trace: ${error46.stack}`);
+    }
     import_core8.default.setFailed(error46.message);
   }
 };
