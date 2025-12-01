@@ -1,3 +1,10 @@
+## [1.3.4](https://github.com/yoavniran/overweight/compare/v1.3.3...v1.3.4) (2025-12-01)
+
+
+### Bug Fixes
+
+* enhance error handling and logging in GitHub Action ([c83d9c9](https://github.com/yoavniran/overweight/commit/c83d9c9dde4211dacedf88a2447011574a90f2c8))
+
 ## [1.3.3](https://github.com/yoavniran/overweight/compare/v1.3.2...v1.3.3) (2025-12-01)
 
 

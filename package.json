@@ -1,6 +1,6 @@
 {
   "name": "overweight",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Extensible bundle size guard with pluggable testers, CLI, and GitHub Action.",
   "type": "module",
   "packageManager": "pnpm@9.15.9",
