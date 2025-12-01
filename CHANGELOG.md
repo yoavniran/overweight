@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/yoavniran/overweight/compare/v1.3.1...v1.3.2) (2025-12-01)
+
+
+### Bug Fixes
+
+* action base branch resolve ([326f800](https://github.com/yoavniran/overweight/commit/326f800bc76e1ff3a6a09bbff1b0243d63d5d01a))
+
 ## [1.3.1](https://github.com/yoavniran/overweight/compare/v1.3.0...v1.3.1) (2025-12-01)
 
 

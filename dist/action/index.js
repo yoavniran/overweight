@@ -42487,14 +42487,17 @@ var buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
 };
 var resolveBaseBranch = async (octokit) => {
   if (import_github.default.context.payload.pull_request?.base?.ref) {
+    import_core8.default.info(`base branch is ${import_github.default.context.payload.pull_request.base.ref}`);
     return import_github.default.context.payload.pull_request.base.ref;
   }
   if (process.env.GITHUB_REF_NAME) {
+    import_core8.default.info(`base branch is ${process.env.GITHUB_REF_NAME}`);
     return process.env.GITHUB_REF_NAME;
   }
   if (process.env.GITHUB_REF) {
     const ref = process.env.GITHUB_REF.split("/").pop();
     if (ref) {
+      import_core8.default.info(`base branch is ${ref}`);
       return ref;
     }
   }
@@ -42505,6 +42508,7 @@ var resolveBaseBranch = async (octokit) => {
         owner,
         repo
       });
+      import_core8.default.info(`base branch is ${repoInfo.data.default_branch}`);
       return repoInfo.data.default_branch;
     } catch (error46) {
       import_core8.default.warning(
@@ -42512,6 +42516,7 @@ var resolveBaseBranch = async (octokit) => {
       );
     }
   }
+  import_core8.default.warning("Falling back to 'main' as base branch.");
   return "main";
 };
 var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
