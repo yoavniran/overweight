@@ -4,7 +4,7 @@
     "file": "dist/action/index.js",
     "tester": "raw",
     "size": "1.71 MB",
-    "sizeBytes": 1709216,
+    "sizeBytes": 1709318,
     "limit": "1.8 MB",
     "limitBytes": 1800000
   },
