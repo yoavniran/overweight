@@ -1,3 +1,10 @@
+## [1.3.7](https://github.com/yoavniran/overweight/compare/v1.3.6...v1.3.7) (2025-12-01)
+
+
+### Bug Fixes
+
+* create branch on repo ([c9595c6](https://github.com/yoavniran/overweight/commit/c9595c6078114be358643a01aaa1379a4b32c4fa))
+
 ## [1.3.6](https://github.com/yoavniran/overweight/compare/v1.3.5...v1.3.6) (2025-12-01)
 
 
