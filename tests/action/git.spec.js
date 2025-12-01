@@ -64,7 +64,7 @@ describe("git helpers", () => {
       let fetchCallCount = 0;
       exec.exec.mockImplementation((command, args) => {
         if (command === "git" && args?.[0] === "fetch") {
-          if (args?.some(arg => arg.includes("test-branch"))) {
+          if (args?.some(arg => typeof arg === "string" && arg.includes("test-branch"))) {
             fetchCallCount++;
             if (fetchCallCount === 1) {
               return Promise.reject(new Error("branch not found"));
@@ -82,7 +82,14 @@ describe("git helpers", () => {
 
       expect(result).toBe(false);
       const calls = exec.exec.mock.calls;
-      expect(calls.some(call => call[1]?.includes("checkout") && call[1]?.includes("-b"))).toBe(true);
+      expect(
+        calls.some(
+          call =>
+            call[1]?.[0] === "checkout" &&
+            call[1]?.includes("-B") &&
+            call[1]?.some(arg => typeof arg === "string" && arg.includes("origin/main"))
+        )
+      ).toBe(true);
       expect(calls.some(call => call[1]?.[0] === "push")).toBe(true);
     });
   });

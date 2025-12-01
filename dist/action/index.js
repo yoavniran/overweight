@@ -42560,9 +42560,27 @@ var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
     return true;
   }
   import_core10.default.info(`Branch ${branchName} does not exist. Creating it from ${baseBranch}...`);
-  await exec.exec("git", ["fetch", "origin", baseBranch, "--depth=1"], { silent: true });
-  await exec.exec("git", ["checkout", baseBranch], { silent: true });
-  await exec.exec("git", ["checkout", "-b", branchName], { silent: true });
+  await exec.exec(
+    "git",
+    [
+      "fetch",
+      "origin",
+      `${baseBranch}:refs/remotes/origin/${baseBranch}`,
+      "--force",
+      "--depth=1"
+    ],
+    { silent: true }
+  );
+  await exec.exec(
+    "git",
+    [
+      "checkout",
+      "-B",
+      branchName,
+      `origin/${baseBranch}`
+    ],
+    { silent: true }
+  );
   import_core10.default.info(`Pushing branch ${branchName} to origin...`);
   await exec.exec("git", ["push", "origin", branchName, "--force"], { silent: true });
   import_core10.default.info(`Successfully created and pushed branch ${branchName}`);
