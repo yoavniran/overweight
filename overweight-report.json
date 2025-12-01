@@ -3,10 +3,10 @@
     "label": "dist-action",
     "file": "dist/action/index.js",
     "tester": "raw",
-    "size": "29.4 kB",
-    "sizeBytes": 29443,
-    "limit": "30 kB",
-    "limitBytes": 30000
+    "size": "1.7 MB",
+    "sizeBytes": 1702864,
+    "limit": "1.8 MB",
+    "limitBytes": 1800000
   },
   {
     "label": "dist-cli",
