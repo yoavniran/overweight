@@ -1,25 +1,5 @@
-import * as exec from "@actions/exec";
 import core from "@actions/core";
-
-/**
- * Try to fetch a branch to check if it exists (similar to peter-evans/create-pull-request)
- * @param {string} branchName - The branch name to check
- * @returns {Promise<boolean>} True if branch exists, false otherwise
- */
-export const tryFetchBranch = async (branchName) => {
-  try {
-    await exec.exec("git", [
-      "fetch",
-      "origin",
-      `${branchName}:refs/remotes/origin/${branchName}`,
-      "--force",
-      "--depth=1"
-    ]);
-    return true;
-  } catch (error) {
-    return false;
-  }
-};
+import github from "@actions/github";
 
 /**
  * Ensure a branch exists, creating it from the base branch if needed
@@ -30,51 +10,99 @@ export const tryFetchBranch = async (branchName) => {
  * @returns {Promise<boolean>} True if branch already existed, false if it was created
  */
 export const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
-  core.info(`Checking if branch ${branchName} exists...`);
-  
-  // Try to fetch the branch to see if it exists (like peter-evans/create-pull-request)
-  const branchExists = await tryFetchBranch(branchName);
-  
-  if (branchExists) {
-    core.info(`Branch ${branchName} already exists as remote branch origin/${branchName}`);
-    // Checkout the existing branch
-    await exec.exec("git", ["checkout", branchName], { silent: true });
-    return true;
+  if (!octokit) {
+    throw new Error("ensureUpdateBranchExists requires an authenticated octokit client.");
   }
 
-  // Branch doesn't exist, create it from base branch
-  core.info(`Branch ${branchName} does not exist. Creating it from ${baseBranch}...`);
-  
-  // Fetch the base branch to ensure we have the latest commit from origin
-  await exec.exec(
-    "git",
-    [
-      "fetch",
-      "origin",
-      `${baseBranch}:refs/remotes/origin/${baseBranch}`,
-      "--force",
-      "--depth=1"
-    ],
-    { silent: true }
-  );
-  
-  // Create and checkout the new branch directly from origin/<baseBranch>
-  await exec.exec(
-    "git",
-    [
-      "checkout",
-      "-B",
-      branchName,
-      `origin/${baseBranch}`
-    ],
-    { silent: true }
-  );
-  
-  // Push the branch to origin
-  core.info(`Pushing branch ${branchName} to origin...`);
-  await exec.exec("git", ["push", "origin", branchName, "--force"], { silent: true });
-  
-  core.info(`Successfully created and pushed branch ${branchName}`);
-  return false;
+  const { owner, repo } = github.context.repo;
+  const branchRef = `heads/${branchName}`;
+  const baseRef = `heads/${baseBranch}`;
+
+  core.info(`Checking if branch ${branchName} exists via GitHub API...`);
+  try {
+    const existing = await octokit.rest.git.getRef({
+      owner,
+      repo,
+      ref: branchRef
+    });
+    const branchSha = existing.data.object?.sha || existing.data.sha;
+    core.info(`Branch ${branchName} already exists at SHA: ${branchSha}`);
+    return true;
+  } catch (error) {
+    if (error.status !== 404) {
+      core.warning(
+        `Failed to check branch ${branchName} existence via GitHub API: ${error.message}`
+      );
+      throw error;
+    }
+    core.info(`Branch ${branchName} does not exist (404), will create it from ${baseBranch}`);
+  }
+
+  core.info(`Fetching base branch ${baseBranch} via GitHub API...`);
+  const base = await octokit.rest.git.getRef({
+    owner,
+    repo,
+    ref: baseRef
+  });
+  const baseSha = base.data.object?.sha || base.data.sha;
+  core.info(`Base branch ${baseBranch} SHA: ${baseSha}`);
+
+  try {
+    core.info(`Creating branch ${branchName} from ${baseBranch} via GitHub API...`);
+    await octokit.rest.git.createRef({
+      owner,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: baseSha
+    });
+    core.info(`Successfully created branch ${branchName}`);
+  } catch (error) {
+    if (error.status === 422) {
+      core.info(`Branch ${branchName} already exists (422), verifying it's accessible...`);
+    } else {
+      core.warning(
+        `Failed to create branch ${branchName} via GitHub API: ${error.message} (status: ${error.status})`
+      );
+      throw error;
+    }
+  }
+
+  // Verify the branch is accessible by retrying getRef with exponential backoff
+  core.info(`Verifying branch ${branchName} is accessible via GitHub API...`);
+  const maxRetries = 5;
+  const baseDelay = 500; // 500ms
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const branchRefData = await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: branchRef
+      });
+      const branchSha = branchRefData.data.object?.sha || branchRefData.data.sha;
+      core.info(`Branch ${branchName} verified at SHA: ${branchSha}`);
+      return true;
+    } catch (error) {
+      if (error.status === 404) {
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          core.info(
+            `Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          core.warning(
+            `Branch ${branchName} still not accessible after ${maxRetries} attempts via GitHub API`
+          );
+          throw new Error(
+            `Branch ${branchName} was created but is not accessible after multiple retries`
+          );
+        }
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return true;
 };
 

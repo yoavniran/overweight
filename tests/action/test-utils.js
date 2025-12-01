@@ -12,31 +12,6 @@ export const createEnoentError = () => {
   return error;
 };
 
-export const setupGitMocks = (execExec, options = {}) => {
-  const {
-    branchExists = false,
-    baseBranch = "main"
-  } = options;
-  
-  execExec.mockImplementation((command, args) => {
-    if (command !== "git") {
-      return Promise.resolve(0);
-    }
-    
-    // Handle git fetch for branch check
-    if (args?.[0] === "fetch" && args?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline"))) {
-      if (branchExists) {
-        return Promise.resolve(0); // Branch exists
-      } else {
-        return Promise.reject(new Error("branch not found")); // Branch doesn't exist
-      }
-    }
-    
-    // All other git commands succeed
-    return Promise.resolve(0);
-  });
-};
-
 export const createOctokitMock = () => {
   const issuesApi = {
     listComments: vi.fn().mockResolvedValue({ data: [] }),
