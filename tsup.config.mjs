@@ -13,7 +13,7 @@ export default [
       cli: "src/cli.js"
     },
     format: ["esm"],
-    target: "node18",
+    target: "node20",
     platform: "node",
     bundle: true,
     clean: true,
@@ -32,7 +32,7 @@ export default [
       "action/index": "src/action/index.js"
     },
     format: ["esm"],
-    target: "node18",
+    target: "node20",
     platform: "node",
     bundle: true,
     clean: false,
