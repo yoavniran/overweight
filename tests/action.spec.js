@@ -849,21 +849,23 @@ describe("GitHub Action integration", () => {
       expect(fetchBranchCalls.length).toBeGreaterThan(0);
       
       const fetchBaseCalls = allCalls.filter(
-        call => call[0] === "git" && call[1]?.[0] === "fetch" && 
-        call[1]?.includes("main")
+        call =>
+          call[0] === "git" &&
+          call[1]?.[0] === "fetch" &&
+          call[1]?.some(
+            arg => typeof arg === "string" && arg.includes("refs/remotes/origin/main")
+          )
       );
       expect(fetchBaseCalls.length).toBeGreaterThan(0);
-      
-      const checkoutBaseCalls = allCalls.filter(
-        call => call[0] === "git" && call[1]?.[0] === "checkout" && 
-        call[1]?.includes("main") && !call[1]?.includes("-b")
-      );
-      expect(checkoutBaseCalls.length).toBeGreaterThan(0);
-      
+
       const createBranchCalls = allCalls.filter(
-        call => call[0] === "git" && call[1]?.[0] === "checkout" && 
-        call[1]?.includes("-b") &&
-        call[1]?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-7"))
+        call =>
+          call[0] === "git" &&
+          call[1]?.[0] === "checkout" &&
+          call[1]?.includes("-B") &&
+          call[1]?.some(
+            arg => typeof arg === "string" && arg.includes("origin/main")
+          )
       );
       expect(createBranchCalls.length).toBeGreaterThan(0);
       
@@ -910,16 +912,22 @@ describe("GitHub Action integration", () => {
       // Make git push fail with a real error
       let pushCalled = false;
       execExec.mockImplementation((command, args) => {
-        if (command === "git") {
-          if (args?.[0] === "fetch" && args?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline"))) {
-            // Branch doesn't exist
-            return Promise.reject(new Error("branch not found"));
-          }
-          if (args?.[0] === "push") {
-            pushCalled = true;
-            const error = new Error("Permission denied");
-            return Promise.reject(error);
-          }
+        if (command !== "git") {
+          return Promise.resolve(0);
+        }
+        if (args?.[0] === "fetch" && args?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline"))) {
+          // Branch does not exist yet
+          return Promise.reject(new Error("branch not found"));
+        }
+        if (args?.[0] === "fetch" && args?.some(arg => typeof arg === "string" && arg.includes("refs/remotes/origin/main"))) {
+          return Promise.resolve(0);
+        }
+        if (args?.[0] === "checkout") {
+          return Promise.resolve(0);
+        }
+        if (args?.[0] === "push") {
+          pushCalled = true;
+          return Promise.reject(new Error("Permission denied"));
         }
         return Promise.resolve(0);
       });

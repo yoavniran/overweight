@@ -45,14 +45,30 @@ export const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch
   // Branch doesn't exist, create it from base branch
   core.info(`Branch ${branchName} does not exist. Creating it from ${baseBranch}...`);
   
-  // Fetch the base branch to ensure we have it
-  await exec.exec("git", ["fetch", "origin", baseBranch, "--depth=1"], { silent: true });
+  // Fetch the base branch to ensure we have the latest commit from origin
+  await exec.exec(
+    "git",
+    [
+      "fetch",
+      "origin",
+      `${baseBranch}:refs/remotes/origin/${baseBranch}`,
+      "--force",
+      "--depth=1"
+    ],
+    { silent: true }
+  );
   
-  // Checkout the base branch first
-  await exec.exec("git", ["checkout", baseBranch], { silent: true });
-  
-  // Create and checkout the new branch from base
-  await exec.exec("git", ["checkout", "-b", branchName], { silent: true });
+  // Create and checkout the new branch directly from origin/<baseBranch>
+  await exec.exec(
+    "git",
+    [
+      "checkout",
+      "-B",
+      branchName,
+      `origin/${baseBranch}`
+    ],
+    { silent: true }
+  );
   
   // Push the branch to origin
   core.info(`Pushing branch ${branchName} to origin...`);
