@@ -1,3 +1,11 @@
+## [1.3.1](https://github.com/yoavniran/overweight/compare/v1.3.0...v1.3.1) (2025-12-01)
+
+
+### Bug Fixes
+
+* action runtime ([d80673c](https://github.com/yoavniran/overweight/commit/d80673c4ad331d1985cc6889951af3f106612741))
+* action runtime ([fe719c7](https://github.com/yoavniran/overweight/commit/fe719c718229f40e9b3a529c5d50be5e389167eb))
+
 # [1.3.0](https://github.com/yoavniran/overweight/compare/v1.2.1...v1.3.0) (2025-12-01)
 
 
