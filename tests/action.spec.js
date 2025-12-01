@@ -654,11 +654,14 @@ describe("GitHub Action integration", () => {
       );
     });
 
-    it("uses GITHUB_REF_NAME when no PR context", async () => {
+    it("uses default branch from API when no PR context", async () => {
       mockRunResult.stats.hasFailures = false;
       githubContext.payload = {};
       process.env.GITHUB_REF_NAME = "feature-branch";
       delete process.env.GITHUB_REF;
+      octokitMock.rest.repos.get.mockResolvedValueOnce({
+        data: { default_branch: "master" }
+      });
       inputs = {
         "github-token": "token",
         "baseline-report-path": "baseline.json",
@@ -671,17 +674,24 @@ describe("GitHub Action integration", () => {
 
       await runAction();
 
-      expect(info).toHaveBeenCalledWith(expect.stringContaining("base branch is feature-branch"));
+      expect(octokitMock.rest.repos.get).toHaveBeenCalled();
+      expect(info).toHaveBeenCalledWith(expect.stringContaining("base branch is master"));
       expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/feature-branch" })
+        expect.objectContaining({ ref: "heads/master" })
+      );
+      expect(octokitMock.rest.pulls.create).toHaveBeenCalledWith(
+        expect.objectContaining({ base: "master" })
       );
     });
 
-    it("parses GITHUB_REF when GITHUB_REF_NAME is not set", async () => {
+    it("uses default branch from API regardless of GITHUB_REF", async () => {
       mockRunResult.stats.hasFailures = false;
       githubContext.payload = {};
       delete process.env.GITHUB_REF_NAME;
       process.env.GITHUB_REF = "refs/heads/release-v1";
+      octokitMock.rest.repos.get.mockResolvedValueOnce({
+        data: { default_branch: "main" }
+      });
       inputs = {
         "github-token": "token",
         "baseline-report-path": "baseline.json",
@@ -694,9 +704,10 @@ describe("GitHub Action integration", () => {
 
       await runAction();
 
-      expect(info).toHaveBeenCalledWith(expect.stringContaining("base branch is release-v1"));
+      expect(octokitMock.rest.repos.get).toHaveBeenCalled();
+      expect(info).toHaveBeenCalledWith(expect.stringContaining("base branch is main"));
       expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/release-v1" })
+        expect.objectContaining({ ref: "heads/main" })
       );
     });
 

@@ -236,19 +236,6 @@ const resolveBaseBranch = async (octokit) => {
     return github.context.payload.pull_request.base.ref;
   }
 
-  if (process.env.GITHUB_REF_NAME) {
-    core.info(`base branch is ${process.env.GITHUB_REF_NAME}`);
-    return process.env.GITHUB_REF_NAME;
-  }
-
-  if (process.env.GITHUB_REF) {
-    const ref = process.env.GITHUB_REF.split("/").pop();
-    if (ref) {
-      core.info(`base branch is ${ref}`);
-      return ref;
-    }
-  }
-
   if (octokit) {
     try {
       const { owner, repo } = github.context.repo;

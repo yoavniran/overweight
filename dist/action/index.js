@@ -42485,20 +42485,22 @@ var buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
   const suffix = prNumber != null ? `pr-${prNumber}` : sanitizeBranchSuffix(currentBranch) || `run-${import_github.default.context.runId || Date.now()}`;
   return `${sanitizeBranchPrefix(prefix)}/${suffix}`;
 };
-var resolveBaseBranch = async (octokit) => {
+var resolveBaseBranch = async (octokit, skipCurrentBranch = false) => {
   if (import_github.default.context.payload.pull_request?.base?.ref) {
     import_core8.default.info(`base branch is ${import_github.default.context.payload.pull_request.base.ref}`);
     return import_github.default.context.payload.pull_request.base.ref;
   }
-  if (process.env.GITHUB_REF_NAME) {
-    import_core8.default.info(`base branch is ${process.env.GITHUB_REF_NAME}`);
-    return process.env.GITHUB_REF_NAME;
-  }
-  if (process.env.GITHUB_REF) {
-    const ref = process.env.GITHUB_REF.split("/").pop();
-    if (ref) {
-      import_core8.default.info(`base branch is ${ref}`);
-      return ref;
+  if (!skipCurrentBranch) {
+    if (process.env.GITHUB_REF_NAME) {
+      import_core8.default.info(`base branch is ${process.env.GITHUB_REF_NAME}`);
+      return process.env.GITHUB_REF_NAME;
+    }
+    if (process.env.GITHUB_REF) {
+      const ref = process.env.GITHUB_REF.split("/").pop();
+      if (ref) {
+        import_core8.default.info(`base branch is ${ref}`);
+        return ref;
+      }
     }
   }
   if (octokit) {
@@ -42732,7 +42734,7 @@ var runAction = async () => {
             `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
           );
         } else {
-          const baseBranch = await resolveBaseBranch(octokit);
+          const baseBranch = await resolveBaseBranch(octokit, true);
           const prTitleInput = import_core8.default.getInput("update-pr-title") || "chore: update baseline report";
           const prTitle = `${prTitleInput} (\u{1F9F3} Overweight Guard)`;
           const prBody = import_core8.default.getInput("update-pr-body") || "Automatic pull request updating the baseline report.";

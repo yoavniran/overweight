@@ -29,6 +29,8 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
       - name: Ensure release branch is up to date
         run: |
             set -euo pipefail
@@ -73,6 +75,12 @@ jobs:
       - run: pnpm run test
       - run: pnpm run build
 
+      - name: Configure git for semantic-release
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
+        run: |
+          git config user.name "Overweight Bot"
+          git config user.email "ci-bot@overweight-gh-action.com"
+
       - name: Run semantic-release (dry run)
         id: semantic_release_dry_run
         if: ${{ steps.dryrun.outputs.value == 'true' }}
@@ -107,6 +115,18 @@ jobs:
             VERSION=$(node -p "require('./package.json').version")
           fi
           echo "next_version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Push dist folder changes
+        if: ${{ steps.dryrun.outputs.value == 'false' }}
+        run: |
+          set -euo pipefail
+          git config user.name "Overweight Bot"
+          git config user.email "ci-bot@overweight-gh-action.com"
+          if [ -n "$(git status --porcelain dist)" ]; then
+            git add dist
+            git commit -m "chore: update dist folder [skip ci]" || true
+            git push origin "${GITHUB_REF_NAME}"
+          fi
 
       - name: Update major release tag
         if: ${{ steps.dryrun.outputs.value == 'false' }}
