@@ -1,3 +1,10 @@
+## [1.3.5](https://github.com/yoavniran/overweight/compare/v1.3.4...v1.3.5) (2025-12-01)
+
+
+### Bug Fixes
+
+* enhance branch verification and file update handling in GitHub Action ([de41512](https://github.com/yoavniran/overweight/commit/de415129606925d67866a38610b30cccf8e5c4ff))
+
 ## [1.3.4](https://github.com/yoavniran/overweight/compare/v1.3.3...v1.3.4) (2025-12-01)
 
 
