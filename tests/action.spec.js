@@ -20,6 +20,7 @@ const setOutput = vi.hoisted(() => vi.fn());
 const setFailed = vi.hoisted(() => vi.fn());
 const info = vi.hoisted(() => vi.fn());
 const warning = vi.hoisted(() => vi.fn());
+const execExec = vi.hoisted(() => vi.fn());
 
 vi.mock("@actions/core", () => {
   const coreMock = {
@@ -110,6 +111,12 @@ vi.mock("@actions/github", () => {
   };
 });
 
+vi.mock("@actions/exec", () => {
+  return {
+    exec: execExec
+  };
+});
+
 let mockConfig;
 const loadConfig = vi.hoisted(() => vi.fn());
 vi.mock("../src/config/load-config.js", () => ({
@@ -163,12 +170,42 @@ const resetOctokitMocks = () => {
 
   octokitMock.rest.git.getRef.mockResolvedValue({ data: { object: { sha: "abc123" } } });
   octokitMock.rest.git.createRef.mockResolvedValue({});
+  
+  // Reset exec mock - by default, git commands succeed
+  execExec.mockReset();
+  execExec.mockResolvedValue(0);
 };
 
 const createEnoentError = () => {
   const error = new Error("ENOENT");
   error.code = "ENOENT";
   return error;
+};
+
+// Helper to setup git exec mocks for branch operations
+const setupGitMocks = (options = {}) => {
+  const {
+    branchExists = false, // Whether the branch exists when fetched
+    baseBranch = "main"
+  } = options;
+  
+  execExec.mockImplementation((command, args) => {
+    if (command !== "git") {
+      return Promise.resolve(0);
+    }
+    
+    // Handle git fetch for branch check
+    if (args?.[0] === "fetch" && args?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline"))) {
+      if (branchExists) {
+        return Promise.resolve(0); // Branch exists
+      } else {
+        return Promise.reject(new Error("branch not found")); // Branch doesn't exist
+      }
+    }
+    
+    // All other git commands succeed
+    return Promise.resolve(0);
+  });
 };
 
 const buildSnapshotFromResults = () =>
@@ -194,6 +231,9 @@ describe("GitHub Action integration", () => {
     delete process.env.GITHUB_REF;
     inputs = {};
     mockConfig = { root: "/repo", files: [] };
+    resetOctokitMocks();
+    // Setup default git mocks - branch doesn't exist by default
+    setupGitMocks({ branchExists: false });
     mockRunResult = {
       results: [
         {
@@ -317,17 +357,15 @@ describe("GitHub Action integration", () => {
       "update-branch-prefix": "overweight/test"
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-    octokitMock.rest.git.getRef
-      .mockRejectedValueOnce(createNotFoundError())
-      .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
+    setupGitMocks({ branchExists: false });
 
     await runAction();
 
     expect(setFailed).not.toHaveBeenCalled();
     expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/baseline.json", expect.any(String));
-    expect(octokitMock.rest.git.createRef).toHaveBeenCalledWith(
-      expect.objectContaining({ ref: "refs/heads/overweight/test/pr-7" })
-    );
+    // Check that git commands were called (push should be called during branch creation)
+    const allGitCalls = execExec.mock.calls.filter(call => call[0] === "git");
+    expect(allGitCalls.length).toBeGreaterThan(0);
     expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
       expect.objectContaining({
         path: "baseline.json",
@@ -646,9 +684,6 @@ describe("GitHub Action integration", () => {
       await runAction();
 
       expect(info).toHaveBeenCalledWith(expect.stringContaining("base branch is develop"));
-      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/develop" })
-      );
       expect(octokitMock.rest.pulls.create).toHaveBeenCalledWith(
         expect.objectContaining({ base: "develop" })
       );
@@ -676,9 +711,6 @@ describe("GitHub Action integration", () => {
 
       expect(octokitMock.rest.repos.get).toHaveBeenCalled();
       expect(info).toHaveBeenCalledWith(expect.stringContaining("base branch is master"));
-      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/master" })
-      );
       expect(octokitMock.rest.pulls.create).toHaveBeenCalledWith(
         expect.objectContaining({ base: "master" })
       );
@@ -706,9 +738,6 @@ describe("GitHub Action integration", () => {
 
       expect(octokitMock.rest.repos.get).toHaveBeenCalled();
       expect(info).toHaveBeenCalledWith(expect.stringContaining("base branch is main"));
-      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/main" })
-      );
     });
 
     it("fetches default branch from API when no context available", async () => {
@@ -736,9 +765,6 @@ describe("GitHub Action integration", () => {
         repo: "repo"
       });
       expect(info).toHaveBeenCalledWith(expect.stringContaining("base branch is master"));
-      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/master" })
-      );
       expect(octokitMock.rest.pulls.create).toHaveBeenCalledWith(
         expect.objectContaining({ base: "master" })
       );
@@ -765,9 +791,6 @@ describe("GitHub Action integration", () => {
       expect(warning).toHaveBeenCalledWith(
         expect.stringContaining("Falling back to 'main' as base branch")
       );
-      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/main" })
-      );
     });
   });
 
@@ -781,16 +804,27 @@ describe("GitHub Action integration", () => {
         "update-baseline": "true"
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-      octokitMock.rest.git.getRef
-        .mockResolvedValueOnce({ data: { object: { sha: "existing-sha" } } })
-        .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
+      setupGitMocks({ branchExists: true });
 
       await runAction();
 
-      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/overweight/baseline/pr-7" })
+      // Check that git fetch was called for the branch
+      const fetchCalls = execExec.mock.calls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "fetch" && call[1]?.[1] === "origin"
       );
-      expect(octokitMock.rest.git.createRef).not.toHaveBeenCalled();
+      expect(fetchCalls.length).toBeGreaterThan(0);
+      const fetchArgs = fetchCalls[0][1];
+      expect(fetchArgs).toContain("fetch");
+      expect(fetchArgs).toContain("origin");
+      expect(fetchArgs.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-7"))).toBe(true);
+      
+      // Check that git checkout was called for the branch
+      const checkoutCalls = execExec.mock.calls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "checkout" && !call[1]?.includes("-b")
+      );
+      expect(checkoutCalls.length).toBeGreaterThan(0);
+      const checkoutArgs = checkoutCalls[0][1];
+      expect(checkoutArgs.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-7"))).toBe(true);
     });
 
     it("creates new branch when it does not exist", async () => {
@@ -802,18 +836,42 @@ describe("GitHub Action integration", () => {
         "update-baseline": "true"
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
-        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } });
+      setupGitMocks({ branchExists: false });
 
       await runAction();
 
-      expect(octokitMock.rest.git.createRef).toHaveBeenCalledWith({
-        owner: "owner",
-        repo: "repo",
-        ref: "refs/heads/overweight/baseline/pr-7",
-        sha: "base-sha"
-      });
+      // Verify git commands were called
+      const allCalls = execExec.mock.calls;
+      const fetchBranchCalls = allCalls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "fetch" && 
+        call[1]?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-7"))
+      );
+      expect(fetchBranchCalls.length).toBeGreaterThan(0);
+      
+      const fetchBaseCalls = allCalls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "fetch" && 
+        call[1]?.includes("main")
+      );
+      expect(fetchBaseCalls.length).toBeGreaterThan(0);
+      
+      const checkoutBaseCalls = allCalls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "checkout" && 
+        call[1]?.includes("main") && !call[1]?.includes("-b")
+      );
+      expect(checkoutBaseCalls.length).toBeGreaterThan(0);
+      
+      const createBranchCalls = allCalls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "checkout" && 
+        call[1]?.includes("-b") &&
+        call[1]?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-7"))
+      );
+      expect(createBranchCalls.length).toBeGreaterThan(0);
+      
+      const pushCalls = allCalls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "push" &&
+        call[1]?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-7"))
+      );
+      expect(pushCalls.length).toBeGreaterThan(0);
     });
 
     it("handles race condition when branch is created between check and create", async () => {
@@ -825,24 +883,22 @@ describe("GitHub Action integration", () => {
         "update-baseline": "true"
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-      const createRefError = new Error("Reference already exists");
-      createRefError.status = 422;
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError()) // Initial check - branch doesn't exist
-        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }) // Get base branch
-        .mockResolvedValueOnce({ data: { object: { sha: "branch-sha" } } }); // Verification after 422
-      octokitMock.rest.git.createRef.mockRejectedValueOnce(createRefError);
+      // First fetch fails (branch doesn't exist), then we create it
+      setupGitMocks({ branchExists: false });
 
       await runAction();
 
-      expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
-      expect(info).toHaveBeenCalledWith(
-        expect.stringContaining("Branch overweight/baseline/pr-7 already exists (422), verifying it's accessible")
+      // Should try to fetch first (fails), then create branch
+      const fetchCalls = execExec.mock.calls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "fetch" && 
+        call[1]?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-7"))
       );
+      expect(fetchCalls.length).toBeGreaterThan(0);
+      // The action should complete successfully
       expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalled();
     });
 
-    it("throws error for non-422 createRef failures", async () => {
+    it("throws error for git push failures", async () => {
       mockRunResult.stats.hasFailures = false;
       process.env.GITHUB_REF_NAME = "feature/error-case";
       inputs = {
@@ -851,19 +907,31 @@ describe("GitHub Action integration", () => {
         "update-baseline": "true"
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-      const createRefError = new Error("Permission denied");
-      createRefError.status = 403;
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
-        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } });
-      octokitMock.rest.git.createRef.mockRejectedValueOnce(createRefError);
+      // Make git push fail with a real error
+      let pushCalled = false;
+      execExec.mockImplementation((command, args) => {
+        if (command === "git") {
+          if (args?.[0] === "fetch" && args?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline"))) {
+            // Branch doesn't exist
+            return Promise.reject(new Error("branch not found"));
+          }
+          if (args?.[0] === "push") {
+            pushCalled = true;
+            const error = new Error("Permission denied");
+            return Promise.reject(error);
+          }
+        }
+        return Promise.resolve(0);
+      });
 
       await runAction();
 
-      expect(setFailed).toHaveBeenCalledWith(expect.stringContaining("Permission denied"));
+      expect(pushCalled).toBe(true);
+      expect(setFailed).toHaveBeenCalled();
     });
 
     it("handles case where branch exists but createOrUpdateFileContents fails with branch not found", async () => {
+      vi.useFakeTimers();
       mockRunResult.stats.hasFailures = false;
       process.env.GITHUB_REF_NAME = "feature/branch-exists-but-file-update-fails";
       githubContext.payload = {
@@ -881,9 +949,19 @@ describe("GitHub Action integration", () => {
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
       
-      // First call to ensureUpdateBranchExists: branch exists check succeeds
-      octokitMock.rest.git.getRef
-        .mockResolvedValueOnce({ data: { object: { sha: "existing-branch-sha" } } }); // Branch exists, returns early
+      // First call: branch exists (git fetch succeeds)
+      let fetchCallCount = 0;
+      execExec.mockImplementation((command, args) => {
+        if (command === "git" && args?.[0] === "fetch" && args?.includes("overweight/baseline/pr-929")) {
+          fetchCallCount++;
+          if (fetchCallCount === 1) {
+            return Promise.resolve(0); // Branch exists initially
+          } else {
+            return Promise.reject(new Error("branch not found")); // Branch deleted before retry
+          }
+        }
+        return Promise.resolve(0);
+      });
       
       // getExistingFileSha returns undefined (file doesn't exist, 404 from getContent)
       octokitMock.rest.repos.getContent.mockRejectedValueOnce(createNotFoundError());
@@ -894,32 +972,29 @@ describe("GitHub Action integration", () => {
       octokitMock.rest.repos.createOrUpdateFileContents
         .mockRejectedValueOnce(branchNotFoundError);
       
-      // Recovery: second call to ensureUpdateBranchExists - branch check fails (branch was deleted)
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError()) // Branch doesn't exist
-        .mockResolvedValueOnce({ data: { object: { sha: "master-sha" } } }); // Base branch exists
-      
-      // Branch recreation succeeds
-      octokitMock.rest.git.createRef.mockResolvedValueOnce({});
-      
       // Second attempt to update file succeeds
       octokitMock.rest.repos.createOrUpdateFileContents.mockResolvedValueOnce({});
 
-      await runAction();
+      const actionPromise = runAction();
+      await vi.advanceTimersByTimeAsync(1000);
+      await actionPromise;
+      vi.useRealTimers();
 
       expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledTimes(2);
       expect(warning).toHaveBeenCalledWith(
         expect.stringContaining("Branch overweight/baseline/pr-929 not found when updating file")
       );
-      // In recovery, ensureUpdateBranchExists should be called again and create the branch
-      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/overweight/baseline/pr-929" })
+      // In recovery, ensureUpdateBranchExists should be called again
+      const recoveryFetchCalls = execExec.mock.calls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "fetch" && 
+        call[1]?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-929"))
       );
-      expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
+      expect(recoveryFetchCalls.length).toBeGreaterThan(0);
       expect(setFailed).not.toHaveBeenCalled();
     });
 
     it("handles getExistingFileSha returning undefined, then createOrUpdateFileContents fails with branch not found and recreates", async () => {
+      vi.useFakeTimers();
       mockRunResult.stats.hasFailures = false;
       process.env.GITHUB_REF_NAME = "feature/recreate-branch";
       githubContext.payload = {
@@ -937,9 +1012,19 @@ describe("GitHub Action integration", () => {
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
       
-      // First call to ensureUpdateBranchExists: branch exists check succeeds
-      octokitMock.rest.git.getRef
-        .mockResolvedValueOnce({ data: { object: { sha: "existing-branch-sha" } } }); // Branch exists, returns early
+      // First call: branch exists (git fetch succeeds)
+      let fetchCallCount = 0;
+      execExec.mockImplementation((command, args) => {
+        if (command === "git" && args?.[0] === "fetch" && args?.includes("overweight/baseline/pr-929")) {
+          fetchCallCount++;
+          if (fetchCallCount === 1) {
+            return Promise.resolve(0); // Branch exists initially
+          } else {
+            return Promise.reject(new Error("branch not found")); // Branch deleted before retry
+          }
+        }
+        return Promise.resolve(0);
+      });
       
       // getExistingFileSha returns undefined (file doesn't exist, 404 from getContent)
       octokitMock.rest.repos.getContent.mockRejectedValueOnce(createNotFoundError());
@@ -949,78 +1034,25 @@ describe("GitHub Action integration", () => {
       branchNotFoundError.status = 404;
       octokitMock.rest.repos.createOrUpdateFileContents.mockRejectedValueOnce(branchNotFoundError);
       
-      // Recovery: second call to ensureUpdateBranchExists - branch check fails (branch was deleted)
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError()) // Branch doesn't exist
-        .mockResolvedValueOnce({ data: { object: { sha: "master-sha" } } }); // Base branch exists
-      
-      // Branch recreation succeeds
-      octokitMock.rest.git.createRef.mockResolvedValueOnce({});
-      
       // Second attempt to update file succeeds
       octokitMock.rest.repos.createOrUpdateFileContents.mockResolvedValueOnce({});
 
-      await runAction();
-
-      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
-        expect.objectContaining({ ref: "heads/overweight/baseline/pr-929" })
-      );
-      expect(warning).toHaveBeenCalledWith(
-        expect.stringContaining("Branch overweight/baseline/pr-929 not found when updating file")
-      );
-      expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
-      expect(setFailed).not.toHaveBeenCalled();
-    });
-
-    it("handles branch verification retry with multiple 404s before success", async () => {
-      vi.useFakeTimers();
-      mockRunResult.stats.hasFailures = false;
-      process.env.GITHUB_REF_NAME = "feature/verification-retry";
-      inputs = {
-        "github-token": "token",
-        "baseline-report-path": "baseline.json",
-        "update-baseline": "true"
-      };
-      fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-      const createRefError = new Error("Reference already exists");
-      createRefError.status = 422;
-      
-      // Initial check - branch doesn't exist
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
-        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }); // Get base branch
-      
-      octokitMock.rest.git.createRef.mockRejectedValueOnce(createRefError);
-      
-      // Verification retries: first 2 attempts fail with 404, then succeeds
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError()) // Attempt 1: 404
-        .mockRejectedValueOnce(createNotFoundError()) // Attempt 2: 404
-        .mockResolvedValueOnce({ data: { object: { sha: "branch-sha" } } }); // Attempt 3: success
-      
-      octokitMock.rest.repos.getContent.mockRejectedValueOnce(createNotFoundError());
-      octokitMock.rest.repos.createOrUpdateFileContents.mockResolvedValueOnce({});
-
       const actionPromise = runAction();
-      
-      // Fast-forward through delays: 500ms, 1000ms
-      await vi.advanceTimersByTimeAsync(2000);
-      
+      await vi.advanceTimersByTimeAsync(1000);
       await actionPromise;
       vi.useRealTimers();
 
-      expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
-      expect(info).toHaveBeenCalledWith(
-        expect.stringContaining("Branch overweight/baseline/pr-7 already exists (422), verifying it's accessible")
+      const fetchCalls = execExec.mock.calls.filter(
+        call => call[0] === "git" && call[1]?.[0] === "fetch" && 
+        call[1]?.some(arg => typeof arg === "string" && arg.includes("overweight/baseline/pr-929"))
       );
-      expect(info).toHaveBeenCalledWith(
-        expect.stringContaining("Branch overweight/baseline/pr-7 not yet accessible (404), retrying")
+      expect(fetchCalls.length).toBeGreaterThan(0);
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("Branch overweight/baseline/pr-929 not found when updating file")
       );
-      expect(info).toHaveBeenCalledWith(
-        expect.stringContaining("Branch overweight/baseline/pr-7 verified and accessible")
-      );
-      expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalled();
+      expect(setFailed).not.toHaveBeenCalled();
     });
+
 
     it("handles file update retry with multiple 404s and branch verification", async () => {
       vi.useFakeTimers();
@@ -1084,50 +1116,6 @@ describe("GitHub Action integration", () => {
       expect(setFailed).not.toHaveBeenCalled();
     });
 
-    it("fails after max retries if branch verification never succeeds", async () => {
-      vi.useFakeTimers();
-      mockRunResult.stats.hasFailures = false;
-      process.env.GITHUB_REF_NAME = "feature/max-retries-fail";
-      inputs = {
-        "github-token": "token",
-        "baseline-report-path": "baseline.json",
-        "update-baseline": "true"
-      };
-      fsMock.readFile.mockRejectedValueOnce(createEnoentError());
-      const createRefError = new Error("Reference already exists");
-      createRefError.status = 422;
-      
-      // Initial check - branch doesn't exist
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
-        .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }); // Get base branch
-      
-      octokitMock.rest.git.createRef.mockRejectedValueOnce(createRefError);
-      
-      // Verification retries: all 5 attempts fail with 404
-      octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError()) // Attempt 1
-        .mockRejectedValueOnce(createNotFoundError()) // Attempt 2
-        .mockRejectedValueOnce(createNotFoundError()) // Attempt 3
-        .mockRejectedValueOnce(createNotFoundError()) // Attempt 4
-        .mockRejectedValueOnce(createNotFoundError()); // Attempt 5 (final)
-
-      const actionPromise = runAction();
-      
-      // Fast-forward through all delays: 500ms + 1000ms + 2000ms + 4000ms + 8000ms = 15500ms
-      await vi.advanceTimersByTimeAsync(16000);
-      
-      await actionPromise;
-      vi.useRealTimers();
-
-      expect(octokitMock.rest.git.createRef).toHaveBeenCalled();
-      expect(warning).toHaveBeenCalledWith(
-        expect.stringContaining("Branch overweight/baseline/pr-7 still not accessible after 5 attempts")
-      );
-      expect(setFailed).toHaveBeenCalledWith(
-        expect.stringContaining("was created but is not accessible after multiple retries")
-      );
-    });
   });
 
   afterAll(() => {

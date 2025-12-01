@@ -1,3 +1,10 @@
+## [1.3.6](https://github.com/yoavniran/overweight/compare/v1.3.5...v1.3.6) (2025-12-01)
+
+
+### Bug Fixes
+
+* add @actions/exec dependency and refactor branch management logic ([de5a756](https://github.com/yoavniran/overweight/commit/de5a756669020e09411531d06a93d8de5e2defbf))
+
 ## [1.3.5](https://github.com/yoavniran/overweight/compare/v1.3.4...v1.3.5) (2025-12-01)
 
 

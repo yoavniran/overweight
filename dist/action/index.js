@@ -1,8 +1,8 @@
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import path, { dirname } from 'path';
-import fs4 from 'fs/promises';
 import { Buffer as Buffer$1 } from 'buffer';
+import fs4 from 'fs/promises';
 import { promisify } from 'util';
 import { brotliCompress, gzip, constants } from 'zlib';
 import fs3 from 'fs';
@@ -1012,14 +1012,14 @@ var require_util = __commonJS({
         }
         const port = url2.port != null ? url2.port : url2.protocol === "https:" ? 443 : 80;
         let origin = url2.origin != null ? url2.origin : `${url2.protocol}//${url2.hostname}:${port}`;
-        let path5 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
+        let path7 = url2.path != null ? url2.path : `${url2.pathname || ""}${url2.search || ""}`;
         if (origin.endsWith("/")) {
           origin = origin.substring(0, origin.length - 1);
         }
-        if (path5 && !path5.startsWith("/")) {
-          path5 = `/${path5}`;
+        if (path7 && !path7.startsWith("/")) {
+          path7 = `/${path7}`;
         }
-        url2 = new URL(origin + path5);
+        url2 = new URL(origin + path7);
       }
       return url2;
     }
@@ -2624,20 +2624,20 @@ var require_parseParams = __commonJS({
 // node_modules/.pnpm/@fastify+busboy@2.1.1/node_modules/@fastify/busboy/lib/utils/basename.js
 var require_basename = __commonJS({
   "node_modules/.pnpm/@fastify+busboy@2.1.1/node_modules/@fastify/busboy/lib/utils/basename.js"(exports$1, module) {
-    module.exports = function basename(path5) {
-      if (typeof path5 !== "string") {
+    module.exports = function basename(path7) {
+      if (typeof path7 !== "string") {
         return "";
       }
-      for (var i = path5.length - 1; i >= 0; --i) {
-        switch (path5.charCodeAt(i)) {
+      for (var i = path7.length - 1; i >= 0; --i) {
+        switch (path7.charCodeAt(i)) {
           case 47:
           // '/'
           case 92:
-            path5 = path5.slice(i + 1);
-            return path5 === ".." || path5 === "." ? "" : path5;
+            path7 = path7.slice(i + 1);
+            return path7 === ".." || path7 === "." ? "" : path7;
         }
       }
-      return path5 === ".." || path5 === "." ? "" : path5;
+      return path7 === ".." || path7 === "." ? "" : path7;
     };
   }
 });
@@ -5653,7 +5653,7 @@ var require_request = __commonJS({
     }
     var Request = class _Request {
       constructor(origin, {
-        path: path5,
+        path: path7,
         method,
         body,
         headers,
@@ -5667,11 +5667,11 @@ var require_request = __commonJS({
         throwOnError,
         expectContinue
       }, handler2) {
-        if (typeof path5 !== "string") {
+        if (typeof path7 !== "string") {
           throw new InvalidArgumentError("path must be a string");
-        } else if (path5[0] !== "/" && !(path5.startsWith("http://") || path5.startsWith("https://")) && method !== "CONNECT") {
+        } else if (path7[0] !== "/" && !(path7.startsWith("http://") || path7.startsWith("https://")) && method !== "CONNECT") {
           throw new InvalidArgumentError("path must be an absolute URL or start with a slash");
-        } else if (invalidPathRegex.exec(path5) !== null) {
+        } else if (invalidPathRegex.exec(path7) !== null) {
           throw new InvalidArgumentError("invalid request path");
         }
         if (typeof method !== "string") {
@@ -5734,7 +5734,7 @@ var require_request = __commonJS({
         this.completed = false;
         this.aborted = false;
         this.upgrade = upgrade || null;
-        this.path = query ? util.buildURL(path5, query) : path5;
+        this.path = query ? util.buildURL(path7, query) : path7;
         this.origin = origin;
         this.idempotent = idempotent == null ? method === "HEAD" || method === "GET" : idempotent;
         this.blocking = blocking == null ? false : blocking;
@@ -6731,9 +6731,9 @@ var require_RedirectHandler = __commonJS({
           return this.handler.onHeaders(statusCode, headers, resume, statusText);
         }
         const { origin, pathname, search } = util.parseURL(new URL(this.location, this.opts.origin && new URL(this.opts.path, this.opts.origin)));
-        const path5 = search ? `${pathname}${search}` : pathname;
+        const path7 = search ? `${pathname}${search}` : pathname;
         this.opts.headers = cleanRequestHeaders(this.opts.headers, statusCode === 303, this.opts.origin !== origin);
-        this.opts.path = path5;
+        this.opts.path = path7;
         this.opts.origin = origin;
         this.opts.maxRedirections = 0;
         this.opts.query = null;
@@ -7969,7 +7969,7 @@ var require_client = __commonJS({
         writeH2(client, client[kHTTP2Session], request2);
         return;
       }
-      const { body, method, path: path5, host, upgrade, headers, blocking, reset } = request2;
+      const { body, method, path: path7, host, upgrade, headers, blocking, reset } = request2;
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
         body.read(0);
@@ -8019,7 +8019,7 @@ var require_client = __commonJS({
       if (blocking) {
         socket[kBlocking] = true;
       }
-      let header = `${method} ${path5} HTTP/1.1\r
+      let header = `${method} ${path7} HTTP/1.1\r
 `;
       if (typeof host === "string") {
         header += `host: ${host}\r
@@ -8082,7 +8082,7 @@ upgrade: ${upgrade}\r
       return true;
     }
     function writeH2(client, session, request2) {
-      const { body, method, path: path5, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
+      const { body, method, path: path7, host, upgrade, expectContinue, signal, headers: reqHeaders } = request2;
       let headers;
       if (typeof reqHeaders === "string") headers = Request[kHTTP2CopyHeaders](reqHeaders.trim());
       else headers = reqHeaders;
@@ -8125,7 +8125,7 @@ upgrade: ${upgrade}\r
         });
         return true;
       }
-      headers[HTTP2_HEADER_PATH] = path5;
+      headers[HTTP2_HEADER_PATH] = path7;
       headers[HTTP2_HEADER_SCHEME] = "https";
       const expectsPayload = method === "PUT" || method === "POST" || method === "PATCH";
       if (body && typeof body.read === "function") {
@@ -10349,20 +10349,20 @@ var require_mock_utils = __commonJS({
       }
       return true;
     }
-    function safeUrl(path5) {
-      if (typeof path5 !== "string") {
-        return path5;
+    function safeUrl(path7) {
+      if (typeof path7 !== "string") {
+        return path7;
       }
-      const pathSegments = path5.split("?");
+      const pathSegments = path7.split("?");
       if (pathSegments.length !== 2) {
-        return path5;
+        return path7;
       }
       const qp = new URLSearchParams(pathSegments.pop());
       qp.sort();
       return [...pathSegments, qp.toString()].join("?");
     }
-    function matchKey(mockDispatch2, { path: path5, method, body, headers }) {
-      const pathMatch = matchValue(mockDispatch2.path, path5);
+    function matchKey(mockDispatch2, { path: path7, method, body, headers }) {
+      const pathMatch = matchValue(mockDispatch2.path, path7);
       const methodMatch = matchValue(mockDispatch2.method, method);
       const bodyMatch = typeof mockDispatch2.body !== "undefined" ? matchValue(mockDispatch2.body, body) : true;
       const headersMatch = matchHeaders(mockDispatch2, headers);
@@ -10380,7 +10380,7 @@ var require_mock_utils = __commonJS({
     function getMockDispatch(mockDispatches, key) {
       const basePath = key.query ? buildURL(key.path, key.query) : key.path;
       const resolvedPath = typeof basePath === "string" ? safeUrl(basePath) : basePath;
-      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path5 }) => matchValue(safeUrl(path5), resolvedPath));
+      let matchedMockDispatches = mockDispatches.filter(({ consumed }) => !consumed).filter(({ path: path7 }) => matchValue(safeUrl(path7), resolvedPath));
       if (matchedMockDispatches.length === 0) {
         throw new MockNotMatchedError(`Mock dispatch not matched for path '${resolvedPath}'`);
       }
@@ -10417,9 +10417,9 @@ var require_mock_utils = __commonJS({
       }
     }
     function buildKey(opts) {
-      const { path: path5, method, body, headers, query } = opts;
+      const { path: path7, method, body, headers, query } = opts;
       return {
-        path: path5,
+        path: path7,
         method,
         body,
         headers,
@@ -10863,10 +10863,10 @@ var require_pending_interceptors_formatter = __commonJS({
       }
       format(pendingInterceptors) {
         const withPrettyHeaders = pendingInterceptors.map(
-          ({ method, path: path5, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
+          ({ method, path: path7, data: { statusCode }, persist, times, timesInvoked, origin }) => ({
             Method: method,
             Origin: origin,
-            Path: path5,
+            Path: path7,
             "Status code": statusCode,
             Persistent: persist ? "\u2705" : "\u274C",
             Invocations: timesInvoked,
@@ -15445,8 +15445,8 @@ var require_util6 = __commonJS({
         }
       }
     }
-    function validateCookiePath(path5) {
-      for (const char of path5) {
+    function validateCookiePath(path7) {
+      for (const char of path7) {
         const code = char.charCodeAt(0);
         if (code < 33 || char === ";") {
           throw new Error("Invalid cookie path");
@@ -17114,11 +17114,11 @@ var require_undici = __commonJS({
           if (typeof opts.path !== "string") {
             throw new InvalidArgumentError("invalid opts.path");
           }
-          let path5 = opts.path;
+          let path7 = opts.path;
           if (!opts.path.startsWith("/")) {
-            path5 = `/${path5}`;
+            path7 = `/${path7}`;
           }
-          url2 = new URL(util.parseOrigin(url2).origin + path5);
+          url2 = new URL(util.parseOrigin(url2).origin + path7);
         } else {
           if (!opts) {
             opts = typeof url2 === "object" ? url2 : {};
@@ -18336,7 +18336,7 @@ var require_path_utils = __commonJS({
     };
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.toPlatformPath = exports$1.toWin32Path = exports$1.toPosixPath = void 0;
-    var path5 = __importStar(__require("path"));
+    var path7 = __importStar(__require("path"));
     function toPosixPath(pth) {
       return pth.replace(/[\\]/g, "/");
     }
@@ -18346,7 +18346,7 @@ var require_path_utils = __commonJS({
     }
     exports$1.toWin32Path = toWin32Path;
     function toPlatformPath(pth) {
-      return pth.replace(/[/\\]/g, path5.sep);
+      return pth.replace(/[/\\]/g, path7.sep);
     }
     exports$1.toPlatformPath = toPlatformPath;
   }
@@ -18409,7 +18409,7 @@ var require_io_util = __commonJS({
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.getCmdPath = exports$1.tryGetExecutablePath = exports$1.isRooted = exports$1.isDirectory = exports$1.exists = exports$1.READONLY = exports$1.UV_FS_O_EXLOCK = exports$1.IS_WINDOWS = exports$1.unlink = exports$1.symlink = exports$1.stat = exports$1.rmdir = exports$1.rm = exports$1.rename = exports$1.readlink = exports$1.readdir = exports$1.open = exports$1.mkdir = exports$1.lstat = exports$1.copyFile = exports$1.chmod = void 0;
     var fs5 = __importStar(__require("fs"));
-    var path5 = __importStar(__require("path"));
+    var path7 = __importStar(__require("path"));
     _a2 = fs5.promises, exports$1.chmod = _a2.chmod, exports$1.copyFile = _a2.copyFile, exports$1.lstat = _a2.lstat, exports$1.mkdir = _a2.mkdir, exports$1.open = _a2.open, exports$1.readdir = _a2.readdir, exports$1.readlink = _a2.readlink, exports$1.rename = _a2.rename, exports$1.rm = _a2.rm, exports$1.rmdir = _a2.rmdir, exports$1.stat = _a2.stat, exports$1.symlink = _a2.symlink, exports$1.unlink = _a2.unlink;
     exports$1.IS_WINDOWS = process.platform === "win32";
     exports$1.UV_FS_O_EXLOCK = 268435456;
@@ -18458,7 +18458,7 @@ var require_io_util = __commonJS({
         }
         if (stats && stats.isFile()) {
           if (exports$1.IS_WINDOWS) {
-            const upperExt = path5.extname(filePath).toUpperCase();
+            const upperExt = path7.extname(filePath).toUpperCase();
             if (extensions.some((validExt) => validExt.toUpperCase() === upperExt)) {
               return filePath;
             }
@@ -18482,11 +18482,11 @@ var require_io_util = __commonJS({
           if (stats && stats.isFile()) {
             if (exports$1.IS_WINDOWS) {
               try {
-                const directory = path5.dirname(filePath);
-                const upperName = path5.basename(filePath).toUpperCase();
+                const directory = path7.dirname(filePath);
+                const upperName = path7.basename(filePath).toUpperCase();
                 for (const actualName of yield exports$1.readdir(directory)) {
                   if (upperName === actualName.toUpperCase()) {
-                    filePath = path5.join(directory, actualName);
+                    filePath = path7.join(directory, actualName);
                     break;
                   }
                 }
@@ -18580,7 +18580,7 @@ var require_io = __commonJS({
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.findInPath = exports$1.which = exports$1.mkdirP = exports$1.rmRF = exports$1.mv = exports$1.cp = void 0;
     var assert_1 = __require("assert");
-    var path5 = __importStar(__require("path"));
+    var path7 = __importStar(__require("path"));
     var ioUtil = __importStar(require_io_util());
     function cp(source, dest, options = {}) {
       return __awaiter(this, void 0, void 0, function* () {
@@ -18589,7 +18589,7 @@ var require_io = __commonJS({
         if (destStat && destStat.isFile() && !force) {
           return;
         }
-        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path5.join(dest, path5.basename(source)) : dest;
+        const newDest = destStat && destStat.isDirectory() && copySourceDirectory ? path7.join(dest, path7.basename(source)) : dest;
         if (!(yield ioUtil.exists(source))) {
           throw new Error(`no such file or directory: ${source}`);
         }
@@ -18601,7 +18601,7 @@ var require_io = __commonJS({
             yield cpDirRecursive(source, newDest, 0, force);
           }
         } else {
-          if (path5.relative(source, newDest) === "") {
+          if (path7.relative(source, newDest) === "") {
             throw new Error(`'${newDest}' and '${source}' are the same file`);
           }
           yield copyFile(source, newDest, force);
@@ -18614,7 +18614,7 @@ var require_io = __commonJS({
         if (yield ioUtil.exists(dest)) {
           let destExists = true;
           if (yield ioUtil.isDirectory(dest)) {
-            dest = path5.join(dest, path5.basename(source));
+            dest = path7.join(dest, path7.basename(source));
             destExists = yield ioUtil.exists(dest);
           }
           if (destExists) {
@@ -18625,7 +18625,7 @@ var require_io = __commonJS({
             }
           }
         }
-        yield mkdirP(path5.dirname(dest));
+        yield mkdirP(path7.dirname(dest));
         yield ioUtil.rename(source, dest);
       });
     }
@@ -18688,7 +18688,7 @@ var require_io = __commonJS({
         }
         const extensions = [];
         if (ioUtil.IS_WINDOWS && process.env["PATHEXT"]) {
-          for (const extension of process.env["PATHEXT"].split(path5.delimiter)) {
+          for (const extension of process.env["PATHEXT"].split(path7.delimiter)) {
             if (extension) {
               extensions.push(extension);
             }
@@ -18701,12 +18701,12 @@ var require_io = __commonJS({
           }
           return [];
         }
-        if (tool.includes(path5.sep)) {
+        if (tool.includes(path7.sep)) {
           return [];
         }
         const directories = [];
         if (process.env.PATH) {
-          for (const p of process.env.PATH.split(path5.delimiter)) {
+          for (const p of process.env.PATH.split(path7.delimiter)) {
             if (p) {
               directories.push(p);
             }
@@ -18714,7 +18714,7 @@ var require_io = __commonJS({
         }
         const matches = [];
         for (const directory of directories) {
-          const filePath = yield ioUtil.tryGetExecutablePath(path5.join(directory, tool), extensions);
+          const filePath = yield ioUtil.tryGetExecutablePath(path7.join(directory, tool), extensions);
           if (filePath) {
             matches.push(filePath);
           }
@@ -18829,7 +18829,7 @@ var require_toolrunner = __commonJS({
     var os = __importStar(__require("os"));
     var events = __importStar(__require("events"));
     var child = __importStar(__require("child_process"));
-    var path5 = __importStar(__require("path"));
+    var path7 = __importStar(__require("path"));
     var io = __importStar(require_io());
     var ioUtil = __importStar(require_io_util());
     var timers_1 = __require("timers");
@@ -19044,7 +19044,7 @@ var require_toolrunner = __commonJS({
       exec() {
         return __awaiter(this, void 0, void 0, function* () {
           if (!ioUtil.isRooted(this.toolPath) && (this.toolPath.includes("/") || IS_WINDOWS && this.toolPath.includes("\\"))) {
-            this.toolPath = path5.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
+            this.toolPath = path7.resolve(process.cwd(), this.options.cwd || process.cwd(), this.toolPath);
           }
           this.toolPath = yield io.which(this.toolPath, true);
           return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
@@ -19311,7 +19311,7 @@ var require_exec = __commonJS({
     exports$1.getExecOutput = exports$1.exec = void 0;
     var string_decoder_1 = __require("string_decoder");
     var tr = __importStar(require_toolrunner());
-    function exec(commandLine, args, options) {
+    function exec3(commandLine, args, options) {
       return __awaiter(this, void 0, void 0, function* () {
         const commandArgs = tr.argStringToArray(commandLine);
         if (commandArgs.length === 0) {
@@ -19323,7 +19323,7 @@ var require_exec = __commonJS({
         return runner.exec();
       });
     }
-    exports$1.exec = exec;
+    exports$1.exec = exec3;
     function getExecOutput(commandLine, args, options) {
       var _a2, _b;
       return __awaiter(this, void 0, void 0, function* () {
@@ -19346,7 +19346,7 @@ var require_exec = __commonJS({
           }
         };
         const listeners = Object.assign(Object.assign({}, options === null || options === void 0 ? void 0 : options.listeners), { stdout: stdOutListener, stderr: stdErrListener });
-        const exitCode = yield exec(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
+        const exitCode = yield exec3(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
         stdout += stdoutDecoder.end();
         stderr += stderrDecoder.end();
         return {
@@ -19423,12 +19423,12 @@ var require_platform = __commonJS({
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.getDetails = exports$1.isLinux = exports$1.isMacOS = exports$1.isWindows = exports$1.arch = exports$1.platform = void 0;
     var os_1 = __importDefault(__require("os"));
-    var exec = __importStar(require_exec());
+    var exec3 = __importStar(require_exec());
     var getWindowsInfo = () => __awaiter(void 0, void 0, void 0, function* () {
-      const { stdout: version2 } = yield exec.getExecOutput('powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Version"', void 0, {
+      const { stdout: version2 } = yield exec3.getExecOutput('powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Version"', void 0, {
         silent: true
       });
-      const { stdout: name } = yield exec.getExecOutput('powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Caption"', void 0, {
+      const { stdout: name } = yield exec3.getExecOutput('powershell -command "(Get-CimInstance -ClassName Win32_OperatingSystem).Caption"', void 0, {
         silent: true
       });
       return {
@@ -19438,7 +19438,7 @@ var require_platform = __commonJS({
     });
     var getMacOsInfo = () => __awaiter(void 0, void 0, void 0, function* () {
       var _a2, _b, _c, _d;
-      const { stdout } = yield exec.getExecOutput("sw_vers", void 0, {
+      const { stdout } = yield exec3.getExecOutput("sw_vers", void 0, {
         silent: true
       });
       const version2 = (_b = (_a2 = stdout.match(/ProductVersion:\s*(.+)/)) === null || _a2 === void 0 ? void 0 : _a2[1]) !== null && _b !== void 0 ? _b : "";
@@ -19449,7 +19449,7 @@ var require_platform = __commonJS({
       };
     });
     var getLinuxInfo = () => __awaiter(void 0, void 0, void 0, function* () {
-      const { stdout } = yield exec.getExecOutput("lsb_release", ["-i", "-r", "-s"], {
+      const { stdout } = yield exec3.getExecOutput("lsb_release", ["-i", "-r", "-s"], {
         silent: true
       });
       const [name, version2] = stdout.trim().split("\n");
@@ -19541,7 +19541,7 @@ var require_core = __commonJS({
     var file_command_1 = require_file_command();
     var utils_1 = require_utils();
     var os = __importStar(__require("os"));
-    var path5 = __importStar(__require("path"));
+    var path7 = __importStar(__require("path"));
     var oidc_utils_1 = require_oidc_utils();
     var ExitCode;
     (function(ExitCode2) {
@@ -19569,7 +19569,7 @@ var require_core = __commonJS({
       } else {
         (0, command_1.issueCommand)("add-path", {}, inputPath);
       }
-      process.env["PATH"] = `${inputPath}${path5.delimiter}${process.env["PATH"]}`;
+      process.env["PATH"] = `${inputPath}${path7.delimiter}${process.env["PATH"]}`;
     }
     exports$1.addPath = addPath;
     function getInput(name, options) {
@@ -19724,8 +19724,8 @@ var require_context = __commonJS({
           if ((0, fs_1.existsSync)(process.env.GITHUB_EVENT_PATH)) {
             this.payload = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH, { encoding: "utf8" }));
           } else {
-            const path5 = process.env.GITHUB_EVENT_PATH;
-            process.stdout.write(`GITHUB_EVENT_PATH ${path5} does not exist${os_1.EOL}`);
+            const path7 = process.env.GITHUB_EVENT_PATH;
+            process.stdout.write(`GITHUB_EVENT_PATH ${path7} does not exist${os_1.EOL}`);
           }
         }
         this.eventName = process.env.GITHUB_EVENT_NAME;
@@ -23839,7 +23839,7 @@ var require_path = __commonJS({
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.convertPosixPathToPattern = exports$1.convertWindowsPathToPattern = exports$1.convertPathToPattern = exports$1.escapePosixPath = exports$1.escapeWindowsPath = exports$1.escape = exports$1.removeLeadingDotSegment = exports$1.makeAbsolute = exports$1.unixify = void 0;
     var os = __require("os");
-    var path5 = __require("path");
+    var path7 = __require("path");
     var IS_WINDOWS_PLATFORM = os.platform() === "win32";
     var LEADING_DOT_SEGMENT_CHARACTERS_COUNT = 2;
     var POSIX_UNESCAPED_GLOB_SYMBOLS_RE = /(\\?)([()*?[\]{|}]|^!|[!+@](?=\()|\\(?![!()*+?@[\]{|}]))/g;
@@ -23851,7 +23851,7 @@ var require_path = __commonJS({
     }
     exports$1.unixify = unixify;
     function makeAbsolute(cwd, filepath) {
-      return path5.resolve(cwd, filepath);
+      return path7.resolve(cwd, filepath);
     }
     exports$1.makeAbsolute = makeAbsolute;
     function removeLeadingDotSegment(entry) {
@@ -25136,7 +25136,7 @@ var require_braces = __commonJS({
 // node_modules/.pnpm/picomatch@2.3.1/node_modules/picomatch/lib/constants.js
 var require_constants7 = __commonJS({
   "node_modules/.pnpm/picomatch@2.3.1/node_modules/picomatch/lib/constants.js"(exports$1, module) {
-    var path5 = __require("path");
+    var path7 = __require("path");
     var WIN_SLASH = "\\\\/";
     var WIN_NO_SLASH = `[^${WIN_SLASH}]`;
     var DOT_LITERAL = "\\.";
@@ -25306,7 +25306,7 @@ var require_constants7 = __commonJS({
       /* | */
       CHAR_ZERO_WIDTH_NOBREAK_SPACE: 65279,
       /* \uFEFF */
-      SEP: path5.sep,
+      SEP: path7.sep,
       /**
        * Create EXTGLOB_CHARS
        */
@@ -25332,7 +25332,7 @@ var require_constants7 = __commonJS({
 // node_modules/.pnpm/picomatch@2.3.1/node_modules/picomatch/lib/utils.js
 var require_utils6 = __commonJS({
   "node_modules/.pnpm/picomatch@2.3.1/node_modules/picomatch/lib/utils.js"(exports$1) {
-    var path5 = __require("path");
+    var path7 = __require("path");
     var win32 = process.platform === "win32";
     var {
       REGEX_BACKSLASH,
@@ -25361,7 +25361,7 @@ var require_utils6 = __commonJS({
       if (options && typeof options.windows === "boolean") {
         return options.windows;
       }
-      return win32 === true || path5.sep === "\\";
+      return win32 === true || path7.sep === "\\";
     };
     exports$1.escapeLast = (input, char, lastIdx) => {
       const idx = input.lastIndexOf(char, lastIdx);
@@ -26493,7 +26493,7 @@ var require_parse3 = __commonJS({
 // node_modules/.pnpm/picomatch@2.3.1/node_modules/picomatch/lib/picomatch.js
 var require_picomatch = __commonJS({
   "node_modules/.pnpm/picomatch@2.3.1/node_modules/picomatch/lib/picomatch.js"(exports$1, module) {
-    var path5 = __require("path");
+    var path7 = __require("path");
     var scan = require_scan();
     var parse4 = require_parse3();
     var utils = require_utils6();
@@ -26578,7 +26578,7 @@ var require_picomatch = __commonJS({
     };
     picomatch.matchBase = (input, glob, options, posix = utils.isWindows(options)) => {
       const regex = glob instanceof RegExp ? glob : picomatch.makeRe(glob, options);
-      return regex.test(path5.basename(input));
+      return regex.test(path7.basename(input));
     };
     picomatch.isMatch = (str, patterns, options) => picomatch(patterns, options)(str);
     picomatch.parse = (pattern, options) => {
@@ -26802,7 +26802,7 @@ var require_pattern = __commonJS({
   "node_modules/.pnpm/fast-glob@3.3.3/node_modules/fast-glob/out/utils/pattern.js"(exports$1) {
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.isAbsolute = exports$1.partitionAbsoluteAndRelative = exports$1.removeDuplicateSlashes = exports$1.matchAny = exports$1.convertPatternsToRe = exports$1.makeRe = exports$1.getPatternParts = exports$1.expandBraceExpansion = exports$1.expandPatternsWithBraceExpansion = exports$1.isAffectDepthOfReadingPattern = exports$1.endsWithSlashGlobStar = exports$1.hasGlobStar = exports$1.getBaseDirectory = exports$1.isPatternRelatedToParentDirectory = exports$1.getPatternsOutsideCurrentDirectory = exports$1.getPatternsInsideCurrentDirectory = exports$1.getPositivePatterns = exports$1.getNegativePatterns = exports$1.isPositivePattern = exports$1.isNegativePattern = exports$1.convertToNegativePattern = exports$1.convertToPositivePattern = exports$1.isDynamicPattern = exports$1.isStaticPattern = void 0;
-    var path5 = __require("path");
+    var path7 = __require("path");
     var globParent = require_glob_parent();
     var micromatch = require_micromatch();
     var GLOBSTAR = "**";
@@ -26897,7 +26897,7 @@ var require_pattern = __commonJS({
     }
     exports$1.endsWithSlashGlobStar = endsWithSlashGlobStar;
     function isAffectDepthOfReadingPattern(pattern) {
-      const basename = path5.basename(pattern);
+      const basename = path7.basename(pattern);
       return endsWithSlashGlobStar(pattern) || isStaticPattern(basename);
     }
     exports$1.isAffectDepthOfReadingPattern = isAffectDepthOfReadingPattern;
@@ -26955,7 +26955,7 @@ var require_pattern = __commonJS({
     }
     exports$1.partitionAbsoluteAndRelative = partitionAbsoluteAndRelative;
     function isAbsolute(pattern) {
-      return path5.isAbsolute(pattern);
+      return path7.isAbsolute(pattern);
     }
     exports$1.isAbsolute = isAbsolute;
   }
@@ -27128,8 +27128,8 @@ var require_utils7 = __commonJS({
     exports$1.errno = errno;
     var fs5 = require_fs();
     exports$1.fs = fs5;
-    var path5 = require_path();
-    exports$1.path = path5;
+    var path7 = require_path();
+    exports$1.path = path7;
     var pattern = require_pattern();
     exports$1.pattern = pattern;
     var stream = require_stream();
@@ -27239,8 +27239,8 @@ var require_async = __commonJS({
   "node_modules/.pnpm/@nodelib+fs.stat@2.0.5/node_modules/@nodelib/fs.stat/out/providers/async.js"(exports$1) {
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.read = void 0;
-    function read(path5, settings, callback) {
-      settings.fs.lstat(path5, (lstatError, lstat) => {
+    function read(path7, settings, callback) {
+      settings.fs.lstat(path7, (lstatError, lstat) => {
         if (lstatError !== null) {
           callFailureCallback(callback, lstatError);
           return;
@@ -27249,7 +27249,7 @@ var require_async = __commonJS({
           callSuccessCallback(callback, lstat);
           return;
         }
-        settings.fs.stat(path5, (statError, stat) => {
+        settings.fs.stat(path7, (statError, stat) => {
           if (statError !== null) {
             if (settings.throwErrorOnBrokenSymbolicLink) {
               callFailureCallback(callback, statError);
@@ -27280,13 +27280,13 @@ var require_sync = __commonJS({
   "node_modules/.pnpm/@nodelib+fs.stat@2.0.5/node_modules/@nodelib/fs.stat/out/providers/sync.js"(exports$1) {
     Object.defineProperty(exports$1, "__esModule", { value: true });
     exports$1.read = void 0;
-    function read(path5, settings) {
-      const lstat = settings.fs.lstatSync(path5);
+    function read(path7, settings) {
+      const lstat = settings.fs.lstatSync(path7);
       if (!lstat.isSymbolicLink() || !settings.followSymbolicLink) {
         return lstat;
       }
       try {
-        const stat = settings.fs.statSync(path5);
+        const stat = settings.fs.statSync(path7);
         if (settings.markSymbolicLink) {
           stat.isSymbolicLink = () => true;
         }
@@ -27354,17 +27354,17 @@ var require_out = __commonJS({
     var sync = require_sync();
     var settings_1 = require_settings();
     exports$1.Settings = settings_1.default;
-    function stat(path5, optionsOrSettingsOrCallback, callback) {
+    function stat(path7, optionsOrSettingsOrCallback, callback) {
       if (typeof optionsOrSettingsOrCallback === "function") {
-        async.read(path5, getSettings(), optionsOrSettingsOrCallback);
+        async.read(path7, getSettings(), optionsOrSettingsOrCallback);
         return;
       }
-      async.read(path5, getSettings(optionsOrSettingsOrCallback), callback);
+      async.read(path7, getSettings(optionsOrSettingsOrCallback), callback);
     }
     exports$1.stat = stat;
-    function statSync(path5, optionsOrSettings) {
+    function statSync(path7, optionsOrSettings) {
       const settings = getSettings(optionsOrSettings);
-      return sync.read(path5, settings);
+      return sync.read(path7, settings);
     }
     exports$1.statSync = statSync;
     function getSettings(settingsOrOptions = {}) {
@@ -27575,16 +27575,16 @@ var require_async2 = __commonJS({
           return;
         }
         const tasks = names.map((name) => {
-          const path5 = common.joinPathSegments(directory, name, settings.pathSegmentSeparator);
+          const path7 = common.joinPathSegments(directory, name, settings.pathSegmentSeparator);
           return (done) => {
-            fsStat.stat(path5, settings.fsStatSettings, (error46, stats) => {
+            fsStat.stat(path7, settings.fsStatSettings, (error46, stats) => {
               if (error46 !== null) {
                 done(error46);
                 return;
               }
               const entry = {
                 name,
-                path: path5,
+                path: path7,
                 dirent: utils.fs.createDirentFromStats(name, stats)
               };
               if (settings.stats) {
@@ -27699,7 +27699,7 @@ var require_fs4 = __commonJS({
 var require_settings2 = __commonJS({
   "node_modules/.pnpm/@nodelib+fs.scandir@2.1.5/node_modules/@nodelib/fs.scandir/out/settings.js"(exports$1) {
     Object.defineProperty(exports$1, "__esModule", { value: true });
-    var path5 = __require("path");
+    var path7 = __require("path");
     var fsStat = require_out();
     var fs5 = require_fs4();
     var Settings = class {
@@ -27707,7 +27707,7 @@ var require_settings2 = __commonJS({
         this._options = _options;
         this.followSymbolicLinks = this._getValue(this._options.followSymbolicLinks, false);
         this.fs = fs5.createFileSystemAdapter(this._options.fs);
-        this.pathSegmentSeparator = this._getValue(this._options.pathSegmentSeparator, path5.sep);
+        this.pathSegmentSeparator = this._getValue(this._options.pathSegmentSeparator, path7.sep);
         this.stats = this._getValue(this._options.stats, false);
         this.throwErrorOnBrokenSymbolicLink = this._getValue(this._options.throwErrorOnBrokenSymbolicLink, true);
         this.fsStatSettings = new fsStat.Settings({
@@ -27733,17 +27733,17 @@ var require_out2 = __commonJS({
     var sync = require_sync2();
     var settings_1 = require_settings2();
     exports$1.Settings = settings_1.default;
-    function scandir(path5, optionsOrSettingsOrCallback, callback) {
+    function scandir(path7, optionsOrSettingsOrCallback, callback) {
       if (typeof optionsOrSettingsOrCallback === "function") {
-        async.read(path5, getSettings(), optionsOrSettingsOrCallback);
+        async.read(path7, getSettings(), optionsOrSettingsOrCallback);
         return;
       }
-      async.read(path5, getSettings(optionsOrSettingsOrCallback), callback);
+      async.read(path7, getSettings(optionsOrSettingsOrCallback), callback);
     }
     exports$1.scandir = scandir;
-    function scandirSync(path5, optionsOrSettings) {
+    function scandirSync(path7, optionsOrSettings) {
       const settings = getSettings(optionsOrSettings);
-      return sync.read(path5, settings);
+      return sync.read(path7, settings);
     }
     exports$1.scandirSync = scandirSync;
     function getSettings(settingsOrOptions = {}) {
@@ -28357,7 +28357,7 @@ var require_sync4 = __commonJS({
 var require_settings3 = __commonJS({
   "node_modules/.pnpm/@nodelib+fs.walk@1.2.8/node_modules/@nodelib/fs.walk/out/settings.js"(exports$1) {
     Object.defineProperty(exports$1, "__esModule", { value: true });
-    var path5 = __require("path");
+    var path7 = __require("path");
     var fsScandir = require_out2();
     var Settings = class {
       constructor(_options = {}) {
@@ -28367,7 +28367,7 @@ var require_settings3 = __commonJS({
         this.deepFilter = this._getValue(this._options.deepFilter, null);
         this.entryFilter = this._getValue(this._options.entryFilter, null);
         this.errorFilter = this._getValue(this._options.errorFilter, null);
-        this.pathSegmentSeparator = this._getValue(this._options.pathSegmentSeparator, path5.sep);
+        this.pathSegmentSeparator = this._getValue(this._options.pathSegmentSeparator, path7.sep);
         this.fsScandirSettings = new fsScandir.Settings({
           followSymbolicLinks: this._options.followSymbolicLinks,
           fs: this._options.fs,
@@ -28427,7 +28427,7 @@ var require_out3 = __commonJS({
 var require_reader2 = __commonJS({
   "node_modules/.pnpm/fast-glob@3.3.3/node_modules/fast-glob/out/readers/reader.js"(exports$1) {
     Object.defineProperty(exports$1, "__esModule", { value: true });
-    var path5 = __require("path");
+    var path7 = __require("path");
     var fsStat = require_out();
     var utils = require_utils7();
     var Reader = class {
@@ -28440,7 +28440,7 @@ var require_reader2 = __commonJS({
         });
       }
       _getFullEntryPath(filepath) {
-        return path5.resolve(this._settings.cwd, filepath);
+        return path7.resolve(this._settings.cwd, filepath);
       }
       _makeEntry(stats, pattern) {
         const entry = {
@@ -28847,7 +28847,7 @@ var require_entry2 = __commonJS({
 var require_provider = __commonJS({
   "node_modules/.pnpm/fast-glob@3.3.3/node_modules/fast-glob/out/providers/provider.js"(exports$1) {
     Object.defineProperty(exports$1, "__esModule", { value: true });
-    var path5 = __require("path");
+    var path7 = __require("path");
     var deep_1 = require_deep();
     var entry_1 = require_entry();
     var error_1 = require_error();
@@ -28861,7 +28861,7 @@ var require_provider = __commonJS({
         this.entryTransformer = new entry_2.default(this._settings);
       }
       _getRootDirectory(task) {
-        return path5.resolve(this._settings.cwd, task.base);
+        return path7.resolve(this._settings.cwd, task.base);
       }
       _getReaderOptions(task) {
         const basePath = task.base === "." ? "" : task.base;
@@ -29190,8 +29190,11 @@ var require_out4 = __commonJS({
 });
 
 // src/action/index.js
+var import_core12 = __toESM(require_core(), 1);
+var import_github3 = __toESM(require_github(), 1);
+
+// src/action/config.js
 var import_core8 = __toESM(require_core(), 1);
-var import_github = __toESM(require_github(), 1);
 
 // node_modules/.pnpm/zod@4.1.13/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -29942,10 +29945,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path5) {
-  if (!path5)
+function getElementAtPath(obj, path7) {
+  if (!path7)
     return obj;
-  return path5.reduce((acc, key) => acc?.[key], obj);
+  return path7.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -30311,11 +30314,11 @@ function aborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path5, issues) {
+function prefixIssues(path7, issues) {
   return issues.map((iss) => {
     var _a2;
     (_a2 = iss).path ?? (_a2.path = []);
-    iss.path.unshift(path5);
+    iss.path.unshift(path7);
     return iss;
   });
 }
@@ -30477,7 +30480,7 @@ function formatError(error46, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error46, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error47, path5 = []) => {
+  const processError = (error47, path7 = []) => {
     var _a2, _b;
     for (const issue2 of error47.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
@@ -30487,7 +30490,7 @@ function treeifyError(error46, mapper = (issue2) => issue2.message) {
       } else if (issue2.code === "invalid_element") {
         processError({ issues: issue2.issues }, issue2.path);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path7, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -30519,8 +30522,8 @@ function treeifyError(error46, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path5 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path5) {
+  const path7 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path7) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -42222,6 +42225,30 @@ var loadConfig = async ({ cwd = process.cwd(), configPath, inlineConfig } = {}) 
   );
 };
 
+// src/action/config.js
+var buildInlineConfig = (input) => {
+  if (!input) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(input);
+    return Array.isArray(parsed) ? { files: parsed } : parsed;
+  } catch (error46) {
+    throw new Error(`Failed to parse \`files\` input: ${error46.message}`);
+  }
+};
+var resolveWorkingDirectory = (input) => input ? path.resolve(process.cwd(), input) : process.cwd();
+var resolveConfig = async () => {
+  const configInput = import_core8.default.getInput("config");
+  const filesInput = import_core8.default.getInput("files");
+  const cwd = resolveWorkingDirectory(import_core8.default.getInput("working-directory"));
+  const inlineConfig = buildInlineConfig(filesInput);
+  if (inlineConfig) {
+    return normalizeConfig(inlineConfig, { cwd, source: { type: "inline" } });
+  }
+  return loadConfig({ cwd, configPath: configInput || void 0 });
+};
+
 // src/files/resolve-files.js
 var import_fast_glob = __toESM(require_out4(), 1);
 var resolveFiles = async (pattern, { root }) => {
@@ -42325,11 +42352,7 @@ var jsonFileReporter = (result, options = {}) => {
   }
 };
 
-// src/action/index.js
-var BOT_COMMIT_IDENTITY = {
-  name: "Overweight Bot",
-  email: "ci-bot@overweight-gh-action.com"
-};
+// src/action/report.js
 var statusEmoji = (row) => {
   if (row.error) {
     return "\u{1F4A5}";
@@ -42349,6 +42372,33 @@ var buildSummaryRows = (results) => results.map((entry) => ({
   status: entry.error ? "error" : entry.passed ? "pass" : "fail",
   error: entry.error || null
 }));
+var toTableData = (rows) => [
+  [
+    { data: "Status", header: true },
+    { data: "Label", header: true },
+    { data: "File", header: true },
+    { data: "Size", header: true },
+    { data: "Limit", header: true },
+    { data: "\u0394", header: true },
+    { data: "Trend", header: true }
+  ],
+  ...rows.map((row) => [
+    { data: statusEmoji(row) },
+    { data: row.label },
+    { data: row.file },
+    { data: row.size },
+    { data: row.limit },
+    { data: row.diff },
+    { data: row.trend || "N/A" }
+  ])
+];
+var renderHtmlTable = (rows) => {
+  const header = ["Status", "Label", "File", "Size", "Limit", "\u0394", "Trend"].map((title) => `<th>${title}</th>`).join("");
+  const body = rows.map(
+    (row) => `<tr><td>${statusEmoji(row)}</td><td>${row.label}</td><td>${row.file}</td><td>${row.size}</td><td>${row.limit}</td><td>${row.diff}</td><td>${row.trend || "N/A"}</td></tr>`
+  ).join("");
+  return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
+};
 var readBaselineState = async (baselinePath) => {
   try {
     const raw = await fs4.readFile(baselinePath, "utf-8");
@@ -42415,46 +42465,45 @@ var mergeWithBaseline = (rows, baseline) => {
     };
   });
 };
-var toTableData = (rows) => [
-  [
-    { data: "Status", header: true },
-    { data: "Label", header: true },
-    { data: "File", header: true },
-    { data: "Size", header: true },
-    { data: "Limit", header: true },
-    { data: "\u0394", header: true },
-    { data: "Trend", header: true }
-  ],
-  ...rows.map((row) => [
-    { data: statusEmoji(row) },
-    { data: row.label },
-    { data: row.file },
-    { data: row.size },
-    { data: row.limit },
-    { data: row.diff },
-    { data: row.trend || "N/A" }
-  ])
-];
-var renderHtmlTable = (rows) => {
-  const header = ["Status", "Label", "File", "Size", "Limit", "\u0394", "Trend"].map((title) => `<th>${title}</th>`).join("");
-  const body = rows.map(
-    (row) => `<tr><td>${statusEmoji(row)}</td><td>${row.label}</td><td>${row.file}</td><td>${row.size}</td><td>${row.limit}</td><td>${row.diff}</td><td>${row.trend || "N/A"}</td></tr>`
-  ).join("");
-  return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
-};
-var buildInlineConfig = (input) => {
-  if (!input) {
-    return null;
+var getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
+var ensureRelativePath = (absolutePath) => {
+  const workspaceRoot = getWorkspaceRoot();
+  const relative = path.relative(workspaceRoot, absolutePath);
+  if (relative.startsWith("..")) {
+    throw new Error(
+      `Baseline path "${absolutePath}" is outside of the repository checkout (${workspaceRoot}).`
+    );
   }
-  try {
-    const parsed = JSON.parse(input);
-    return Array.isArray(parsed) ? { files: parsed } : parsed;
-  } catch (error46) {
-    throw new Error(`Failed to parse \`files\` input: ${error46.message}`);
-  }
+  return relative.replace(/\\/g, "/");
 };
-var resolveWorkingDirectory = (input) => input ? path.resolve(process.cwd(), input) : process.cwd();
+
+// src/action/branch.js
+var import_core9 = __toESM(require_core(), 1);
+var import_github = __toESM(require_github(), 1);
 var DEFAULT_PROTECTED_BRANCHES = ["main", "master"];
+var resolveBaseBranch = async (octokit) => {
+  if (import_github.default.context.payload.pull_request?.base?.ref) {
+    import_core9.default.info(`base branch is ${import_github.default.context.payload.pull_request.base.ref}`);
+    return import_github.default.context.payload.pull_request.base.ref;
+  }
+  if (octokit) {
+    try {
+      const { owner, repo } = import_github.default.context.repo;
+      const repoInfo = await octokit.rest.repos.get({
+        owner,
+        repo
+      });
+      import_core9.default.info(`base branch is ${repoInfo.data.default_branch}`);
+      return repoInfo.data.default_branch;
+    } catch (error46) {
+      import_core9.default.warning(
+        `Unable to fetch default branch from repository: ${error46.message}. Falling back to "main".`
+      );
+    }
+  }
+  import_core9.default.warning("Falling back to 'main' as base branch.");
+  return "main";
+};
 var parseProtectedBranchPatterns = (input) => {
   const raw = input && input.trim().length ? input : DEFAULT_PROTECTED_BRANCHES.join(",");
   return raw.split(",").map((entry) => entry.trim()).filter(Boolean);
@@ -42468,16 +42517,15 @@ var branchMatchesPattern = (branch, pattern) => {
   return patternToRegex(pattern).test(branch);
 };
 var isBranchProtected = (branch, patterns) => Boolean(branch) && patterns.some((pattern) => branchMatchesPattern(branch, pattern));
-var getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
-var ensureRelativePath = (absolutePath) => {
-  const workspaceRoot = getWorkspaceRoot();
-  const relative = path.relative(workspaceRoot, absolutePath);
-  if (relative.startsWith("..")) {
-    throw new Error(
-      `Baseline path "${absolutePath}" is outside of the repository checkout (${workspaceRoot}).`
-    );
+var getBranchName = () => {
+  if (process.env.GITHUB_REF_NAME) {
+    return process.env.GITHUB_REF_NAME;
   }
-  return relative.replace(/\\/g, "/");
+  if (process.env.GITHUB_REF) {
+    const match = process.env.GITHUB_REF.match(/refs\/heads\/(.+)$/);
+    return match ? match[1] : process.env.GITHUB_REF.split("/").pop() || "";
+  }
+  return "";
 };
 var sanitizeBranchPrefix = (prefix) => `${prefix}`.replace(/\/+$/, "");
 var sanitizeBranchSuffix = (suffix) => suffix.replace(/[^0-9A-Za-z._-]+/g, "-") ;
@@ -42485,106 +42533,52 @@ var buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
   const suffix = prNumber != null ? `pr-${prNumber}` : sanitizeBranchSuffix(currentBranch) || `run-${import_github.default.context.runId || Date.now()}`;
   return `${sanitizeBranchPrefix(prefix)}/${suffix}`;
 };
-var resolveBaseBranch = async (octokit) => {
-  if (import_github.default.context.payload.pull_request?.base?.ref) {
-    import_core8.default.info(`base branch is ${import_github.default.context.payload.pull_request.base.ref}`);
-    return import_github.default.context.payload.pull_request.base.ref;
-  }
-  if (octokit) {
-    try {
-      const { owner, repo } = import_github.default.context.repo;
-      const repoInfo = await octokit.rest.repos.get({
-        owner,
-        repo
-      });
-      import_core8.default.info(`base branch is ${repoInfo.data.default_branch}`);
-      return repoInfo.data.default_branch;
-    } catch (error46) {
-      import_core8.default.warning(
-        `Unable to fetch default branch from repository: ${error46.message}. Falling back to "main".`
-      );
-    }
-  }
-  import_core8.default.warning("Falling back to 'main' as base branch.");
-  return "main";
-};
-var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
-  const { owner, repo } = import_github.default.context.repo;
-  import_core8.default.info(`Checking if branch ${branchName} exists...`);
+
+// src/action/git.js
+var exec = __toESM(require_exec(), 1);
+var import_core10 = __toESM(require_core(), 1);
+var tryFetchBranch = async (branchName) => {
   try {
-    const branchRef = await octokit.rest.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${branchName}`
-    });
-    const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
-    import_core8.default.info(`Branch ${branchName} already exists at SHA: ${branchSha}`);
+    await exec.exec("git", [
+      "fetch",
+      "origin",
+      `${branchName}:refs/remotes/origin/${branchName}`,
+      "--force",
+      "--depth=1"
+    ]);
     return true;
   } catch (error46) {
-    if (error46.status !== 404) {
-      import_core8.default.warning(`Failed to check if branch ${branchName} exists: ${error46.message}`);
-      throw error46;
-    }
-    import_core8.default.info(`Branch ${branchName} does not exist (404), will create it from ${baseBranch}`);
+    return false;
   }
-  import_core8.default.info(`Fetching base branch ${baseBranch} to create ${branchName}...`);
-  const baseRef = await octokit.rest.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${baseBranch}`
-  });
-  const baseSha = baseRef.data.object?.sha || baseRef.data.sha;
-  import_core8.default.info(`Base branch ${baseBranch} SHA: ${baseSha}`);
-  try {
-    import_core8.default.info(`Creating branch ${branchName} from ${baseBranch} (${baseSha})...`);
-    await octokit.rest.git.createRef({
-      owner,
-      repo,
-      ref: `refs/heads/${branchName}`,
-      sha: baseSha
-    });
-    import_core8.default.info(`Successfully created branch ${branchName}`);
-  } catch (error46) {
-    if (error46.status === 422) {
-      import_core8.default.info(`Branch ${branchName} already exists (422), verifying it's accessible...`);
-    } else {
-      import_core8.default.warning(`Failed to create branch ${branchName}: ${error46.message} (status: ${error46.status})`);
-      throw error46;
-    }
+};
+var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
+  import_core10.default.info(`Checking if branch ${branchName} exists...`);
+  const branchExists = await tryFetchBranch(branchName);
+  if (branchExists) {
+    import_core10.default.info(`Branch ${branchName} already exists as remote branch origin/${branchName}`);
+    await exec.exec("git", ["checkout", branchName], { silent: true });
+    return true;
   }
-  import_core8.default.info(`Verifying branch ${branchName} is accessible...`);
-  const maxRetries = 5;
-  const baseDelay = 500;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const branchRef = await octokit.rest.git.getRef({
-        owner,
-        repo,
-        ref: `heads/${branchName}`
-      });
-      const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
-      import_core8.default.info(`Branch ${branchName} verified and accessible at SHA: ${branchSha}`);
-      return true;
-    } catch (error46) {
-      if (error46.status === 404) {
-        if (attempt < maxRetries - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          import_core8.default.info(`Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        } else {
-          import_core8.default.warning(`Branch ${branchName} still not accessible after ${maxRetries} attempts`);
-          throw new Error(`Branch ${branchName} was created but is not accessible after multiple retries`);
-        }
-      } else {
-        throw error46;
-      }
-    }
-  }
-  return true;
+  import_core10.default.info(`Branch ${branchName} does not exist. Creating it from ${baseBranch}...`);
+  await exec.exec("git", ["fetch", "origin", baseBranch, "--depth=1"], { silent: true });
+  await exec.exec("git", ["checkout", baseBranch], { silent: true });
+  await exec.exec("git", ["checkout", "-b", branchName], { silent: true });
+  import_core10.default.info(`Pushing branch ${branchName} to origin...`);
+  await exec.exec("git", ["push", "origin", branchName, "--force"], { silent: true });
+  import_core10.default.info(`Successfully created and pushed branch ${branchName}`);
+  return false;
+};
+
+// src/action/github.js
+var import_core11 = __toESM(require_core(), 1);
+var import_github2 = __toESM(require_github(), 1);
+var BOT_COMMIT_IDENTITY = {
+  name: "Overweight Bot",
+  email: "ci-bot@overweight-gh-action.com"
 };
 var getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
-  const { owner, repo } = import_github.default.context.repo;
-  import_core8.default.info(`Checking for existing file ${repoPath} on branch ${branchName}...`);
+  const { owner, repo } = import_github2.default.context.repo;
+  import_core11.default.info(`Checking for existing file ${repoPath} on branch ${branchName}...`);
   try {
     const response = await octokit.rest.repos.getContent({
       owner,
@@ -42593,23 +42587,77 @@ var getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
       ref: branchName
     });
     if (!Array.isArray(response.data) && response.data.type === "file") {
-      import_core8.default.info(`Found existing file ${repoPath} on branch ${branchName} with SHA: ${response.data.sha}`);
+      import_core11.default.info(`Found existing file ${repoPath} on branch ${branchName} with SHA: ${response.data.sha}`);
       return response.data.sha;
     }
-    import_core8.default.info(`File ${repoPath} exists on branch ${branchName} but is not a file (type: ${response.data?.type || "unknown"})`);
+    import_core11.default.info(`File ${repoPath} exists on branch ${branchName} but is not a file (type: ${response.data?.type || "unknown"})`);
     return void 0;
   } catch (error46) {
     if (error46.status === 404) {
-      import_core8.default.info(`File ${repoPath} does not exist on branch ${branchName} (404), will create new file`);
+      import_core11.default.info(`File ${repoPath} does not exist on branch ${branchName} (404), will create new file`);
       return void 0;
     }
-    import_core8.default.warning(`Failed to check for existing file ${repoPath} on branch ${branchName}: ${error46.message} (status: ${error46.status})`);
+    import_core11.default.warning(`Failed to check for existing file ${repoPath} on branch ${branchName}: ${error46.message} (status: ${error46.status})`);
     throw error46;
   }
 };
+var createOrUpdateFileContents = async ({
+  octokit,
+  branchName,
+  path: repoPath,
+  content,
+  message,
+  existingSha,
+  ensureBranchExists: ensureBranchExists2,
+  baseBranch
+}) => {
+  const maxRetries = 5;
+  const baseDelay = 1e3;
+  let lastError = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await octokit.rest.repos.createOrUpdateFileContents({
+        owner: import_github2.default.context.repo.owner,
+        repo: import_github2.default.context.repo.repo,
+        path: repoPath,
+        message,
+        content,
+        branch: branchName,
+        sha: existingSha,
+        committer: BOT_COMMIT_IDENTITY,
+        author: BOT_COMMIT_IDENTITY
+      });
+      import_core11.default.info(`Successfully updated file ${repoPath} on branch ${branchName}`);
+      lastError = null;
+      break;
+    } catch (error46) {
+      lastError = error46;
+      if (error46.status === 404 && error46.message?.includes("Branch") && attempt < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        import_core11.default.warning(
+          `Branch ${branchName} not found when updating file (attempt ${attempt + 1}/${maxRetries}). Verifying branch and retrying in ${delay}ms...`
+        );
+        if (ensureBranchExists2) {
+          await ensureBranchExists2({
+            octokit,
+            branchName,
+            baseBranch
+          });
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        throw error46;
+      }
+    }
+  }
+  if (lastError) {
+    import_core11.default.warning(`Failed to update file after ${maxRetries} attempts: ${lastError.message}`);
+    throw lastError;
+  }
+};
 var findExistingBaselinePr = async ({ octokit, branchName }) => {
-  const { owner, repo } = import_github.default.context.repo;
-  import_core8.default.info(`Searching for existing open PRs for branch ${branchName}...`);
+  const { owner, repo } = import_github2.default.context.repo;
+  import_core11.default.info(`Searching for existing open PRs for branch ${branchName}...`);
   const prs = await octokit.rest.pulls.list({
     owner,
     repo,
@@ -42619,15 +42667,15 @@ var findExistingBaselinePr = async ({ octokit, branchName }) => {
   });
   const existingPr = prs.data?.[0] || null;
   if (existingPr) {
-    import_core8.default.info(`Found existing PR #${existingPr.number} for branch ${branchName}: ${existingPr.html_url}`);
+    import_core11.default.info(`Found existing PR #${existingPr.number} for branch ${branchName}: ${existingPr.html_url}`);
   } else {
-    import_core8.default.info(`No existing open PR found for branch ${branchName}`);
+    import_core11.default.info(`No existing open PR found for branch ${branchName}`);
   }
   return existingPr;
 };
 var findPrNumberForBranch = async ({ octokit, branch }) => {
-  const { owner, repo } = import_github.default.context.repo;
-  import_core8.default.info(`Searching for PR number for branch ${branch}...`);
+  const { owner, repo } = import_github2.default.context.repo;
+  import_core11.default.info(`Searching for PR number for branch ${branch}...`);
   const prs = await octokit.rest.pulls.list({
     owner,
     repo,
@@ -42637,25 +42685,29 @@ var findPrNumberForBranch = async ({ octokit, branch }) => {
   });
   const pr = prs.data?.[0];
   if (pr) {
-    import_core8.default.info(`Found PR #${pr.number} for branch ${branch}`);
+    import_core11.default.info(`Found PR #${pr.number} for branch ${branch}`);
   } else {
-    import_core8.default.info(`No open PR found for branch ${branch}`);
+    import_core11.default.info(`No open PR found for branch ${branch}`);
   }
   return pr?.number ?? null;
 };
-var resolveConfig = async () => {
-  const configInput = import_core8.default.getInput("config");
-  const filesInput = import_core8.default.getInput("files");
-  const cwd = resolveWorkingDirectory(import_core8.default.getInput("working-directory"));
-  const inlineConfig = buildInlineConfig(filesInput);
-  if (inlineConfig) {
-    return normalizeConfig(inlineConfig, { cwd, source: { type: "inline" } });
-  }
-  return loadConfig({ cwd, configPath: configInput || void 0 });
+var createPullRequest = async ({ octokit, head, base, title, body }) => {
+  const { owner, repo } = import_github2.default.context.repo;
+  import_core11.default.info(`Creating new PR: head=${head}, base=${base}, title="${title}"`);
+  const prResponse = await octokit.rest.pulls.create({
+    owner,
+    repo,
+    head,
+    base,
+    title,
+    body
+  });
+  import_core11.default.info(`Created baseline update PR #${prResponse.data.number}: ${prResponse.data.html_url}`);
+  return prResponse.data;
 };
 var REPORT_MARKER = "<!-- overweight-report -->";
 var findExistingReportComment = async (octokit, pullRequest) => {
-  const { owner, repo } = import_github.default.context.repo;
+  const { owner, repo } = import_github2.default.context.repo;
   const existingComments = await octokit.rest.issues.listComments({
     owner,
     repo,
@@ -42667,12 +42719,12 @@ var findExistingReportComment = async (octokit, pullRequest) => {
 };
 var commentOnPullRequest = async ({ octokit, pullRequest, body, existingComment }) => {
   if (!pullRequest) {
-    import_core8.default.info("No pull request found in the event payload; skipping comment.");
+    import_core11.default.info("No pull request found in the event payload; skipping comment.");
     return;
   }
   const isFork = pullRequest.head?.repo?.full_name && pullRequest.base?.repo?.full_name && pullRequest.head.repo.full_name !== pullRequest.base.repo.full_name;
   if (isFork) {
-    import_core8.default.info("Skipping pull request comment because the PR originates from a fork.");
+    import_core11.default.info("Skipping pull request comment because the PR originates from a fork.");
     return;
   }
   const previous = existingComment !== void 0 ? existingComment : await findExistingReportComment(octokit, pullRequest);
@@ -42681,22 +42733,22 @@ ${body}`;
   try {
     if (previous) {
       await octokit.rest.issues.updateComment({
-        owner: import_github.default.context.repo.owner,
-        repo: import_github.default.context.repo.repo,
+        owner: import_github2.default.context.repo.owner,
+        repo: import_github2.default.context.repo.repo,
         comment_id: previous.id,
         body: commentBody
       });
     } else {
       await octokit.rest.issues.createComment({
-        repo: import_github.default.context.repo.repo,
-        owner: import_github.default.context.repo.owner,
+        repo: import_github2.default.context.repo.repo,
+        owner: import_github2.default.context.repo.owner,
         issue_number: pullRequest.number,
         body: commentBody
       });
     }
   } catch (error46) {
     if (error46.status === 403) {
-      import_core8.default.warning(
+      import_core11.default.warning(
         `Unable to comment on pull request due to permissions (403). Message: ${error46.message}`
       );
       return;
@@ -42704,26 +42756,27 @@ ${body}`;
     throw error46;
   }
 };
-var getBranchName = () => process.env.GITHUB_REF_NAME || process.env.GITHUB_REF?.split("/").pop() || "";
+
+// src/action/index.js
 var runAction = async () => {
   try {
     const config2 = await resolveConfig();
-    const githubToken = import_core8.default.getInput("github-token");
-    const octokit = githubToken ? import_github.default.getOctokit(githubToken) : null;
-    const commentOnFailure = import_core8.default.getBooleanInput("comment-on-pr");
-    const commentOnFirstRun = import_core8.default.getBooleanInput("comment-on-pr-always");
-    const commentOnEachRun = import_core8.default.getBooleanInput("comment-on-pr-each-run");
-    const prPayload = import_github.default.context.payload.pull_request;
-    const prAction = import_github.default.context.payload.action;
+    const githubToken = import_core12.default.getInput("github-token");
+    const octokit = githubToken ? import_github3.default.getOctokit(githubToken) : null;
+    const commentOnFailure = import_core12.default.getBooleanInput("comment-on-pr");
+    const commentOnFirstRun = import_core12.default.getBooleanInput("comment-on-pr-always");
+    const commentOnEachRun = import_core12.default.getBooleanInput("comment-on-pr-each-run");
+    const prPayload = import_github3.default.context.payload.pull_request;
+    const prAction = import_github3.default.context.payload.action;
     const result = await runChecks(config2);
     const baseRows = buildSummaryRows(result.results);
-    const reportFileInput = import_core8.default.getInput("report-file") || "overweight-report.json";
-    const updateBaseline = import_core8.default.getBooleanInput("update-baseline");
-    const baselineReportPathInput = import_core8.default.getInput("baseline-report-path");
+    const reportFileInput = import_core12.default.getInput("report-file") || "overweight-report.json";
+    const updateBaseline = import_core12.default.getBooleanInput("update-baseline");
+    const baselineReportPathInput = import_core12.default.getInput("baseline-report-path");
     const shouldDefaultBaselinePath = !baselineReportPathInput && updateBaseline && Boolean(reportFileInput);
     const baselinePathCandidate = baselineReportPathInput || (shouldDefaultBaselinePath ? reportFileInput : null);
     if (shouldDefaultBaselinePath) {
-      import_core8.default.info(
+      import_core12.default.info(
         `Overweight: baseline-report-path not provided, defaulting to report-file "${reportFileInput}".`
       );
     }
@@ -42738,155 +42791,32 @@ var runAction = async () => {
       silent: true
     });
     const resolvedReportPath = path.resolve(config2.root, reportFileInput);
-    import_core8.default.info(
+    import_core12.default.info(
       `Overweight: processed ${result.results.length} entries (failures: ${result.stats.hasFailures})`
     );
-    import_core8.default.summary.addHeading("\u{1F9F3} Overweight Size Report");
-    import_core8.default.summary.addTable(toTableData(summaryRows));
-    await import_core8.default.summary.write();
+    import_core12.default.summary.addHeading("\u{1F9F3} Overweight Size Report");
+    import_core12.default.summary.addTable(toTableData(summaryRows));
+    await import_core12.default.summary.write();
     const htmlTable = renderHtmlTable(summaryRows);
-    import_core8.default.setOutput("report-json", JSON.stringify({ rows: summaryRows, stats: result.stats }));
-    import_core8.default.setOutput("report-table", htmlTable);
-    import_core8.default.setOutput("has-failures", String(result.stats.hasFailures));
-    import_core8.default.setOutput("report-file", resolvedReportPath);
+    import_core12.default.setOutput("report-json", JSON.stringify({ rows: summaryRows, stats: result.stats }));
+    import_core12.default.setOutput("report-table", htmlTable);
+    import_core12.default.setOutput("has-failures", String(result.stats.hasFailures));
+    import_core12.default.setOutput("report-file", resolvedReportPath);
     if (baselinePath) {
       if (result.stats.hasFailures) {
-        import_core8.default.info("Skipping baseline update because size checks failed.");
+        import_core12.default.info("Skipping baseline update because size checks failed.");
       } else if (!updateBaseline) {
-        import_core8.default.info("update-baseline=false, skipping baseline write.");
+        import_core12.default.info("update-baseline=false, skipping baseline write.");
       } else if (!githubToken || !octokit) {
-        import_core8.default.setFailed("update-baseline requires github-token to be provided.");
+        import_core12.default.setFailed("update-baseline requires github-token to be provided.");
       } else {
-        import_core8.default.info(`Checking if baseline update is needed for ${baselinePath}...`);
-        const { needsUpdate, content } = await getBaselineUpdateInfo(
+        await handleBaselineUpdate({
+          octokit,
           baselinePath,
           summaryRows,
-          baselineFileContent
-        );
-        const currentBranch = getBranchName() || "unknown";
-        const protectedPatterns = parseProtectedBranchPatterns(
-          import_core8.default.getInput("baseline-protected-branches")
-        );
-        const branchIsProtected = isBranchProtected(currentBranch, protectedPatterns);
-        import_core8.default.info(
-          `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate}, protected=${branchIsProtected})`
-        );
-        if (!needsUpdate) {
-          import_core8.default.info("Baseline is already up to date; no changes written.");
-        } else if (branchIsProtected) {
-          import_core8.default.info(
-            `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
-          );
-        } else {
-          import_core8.default.info("Resolving base branch for baseline update...");
-          const baseBranch = await resolveBaseBranch(octokit);
-          import_core8.default.info(`Resolved base branch: ${baseBranch}`);
-          const prTitleInput = import_core8.default.getInput("update-pr-title") || "chore: update baseline report";
-          const prTitle = `${prTitleInput} (\u{1F9F3} Overweight Guard)`;
-          const prBody = import_core8.default.getInput("update-pr-body") || "Automatic pull request updating the baseline report.";
-          const branchPrefix = import_core8.default.getInput("update-branch-prefix") || "overweight/baseline";
-          import_core8.default.info(`Determining PR identifier for branch ${currentBranch}...`);
-          let prIdentifier = import_github.default.context.payload.pull_request?.number ?? null;
-          if (!prIdentifier) {
-            try {
-              prIdentifier = await findPrNumberForBranch({ octokit, branch: currentBranch });
-              if (prIdentifier) {
-                import_core8.default.info(
-                  `Detected existing pull request #${prIdentifier} for branch ${currentBranch}.`
-                );
-              }
-            } catch (error46) {
-              import_core8.default.warning(
-                `Unable to infer pull request number for branch ${currentBranch}: ${error46.message}`
-              );
-            }
-          }
-          const updateBranchName = buildUpdateBranchName({
-            prefix: branchPrefix,
-            prNumber: prIdentifier,
-            currentBranch
-          });
-          const repoRelativePath = ensureRelativePath(baselinePath);
-          import_core8.default.info(`Preparing to update baseline on branch: ${updateBranchName} (base: ${baseBranch})`);
-          import_core8.default.info(`Baseline file path: ${repoRelativePath}`);
-          await ensureUpdateBranchExists({
-            octokit,
-            branchName: updateBranchName,
-            baseBranch
-          });
-          const existingFileSha = await getExistingFileSha({
-            octokit,
-            branchName: updateBranchName,
-            path: repoRelativePath
-          });
-          await writeBaseline(baselinePath, summaryRows, content);
-          import_core8.default.info(`Wrote updated baseline snapshot to ${baselinePath} (${content.length} bytes)`);
-          const fileContentBase64 = Buffer$1.from(content, "utf-8").toString("base64");
-          import_core8.default.info(`Attempting to update file ${repoRelativePath} on branch ${updateBranchName}${existingFileSha ? ` (existing SHA: ${existingFileSha})` : " (new file)"}...`);
-          const maxRetries = 5;
-          const baseDelay = 1e3;
-          let lastError = null;
-          for (let attempt = 0; attempt < maxRetries; attempt++) {
-            try {
-              await octokit.rest.repos.createOrUpdateFileContents({
-                owner: import_github.default.context.repo.owner,
-                repo: import_github.default.context.repo.repo,
-                path: repoRelativePath,
-                message: prTitle,
-                content: fileContentBase64,
-                branch: updateBranchName,
-                sha: existingFileSha,
-                committer: BOT_COMMIT_IDENTITY,
-                author: BOT_COMMIT_IDENTITY
-              });
-              import_core8.default.info(`Successfully updated file ${repoRelativePath} on branch ${updateBranchName}`);
-              lastError = null;
-              break;
-            } catch (error46) {
-              lastError = error46;
-              if (error46.status === 404 && error46.message?.includes("Branch") && attempt < maxRetries - 1) {
-                const delay = baseDelay * Math.pow(2, attempt);
-                import_core8.default.warning(
-                  `Branch ${updateBranchName} not found when updating file (attempt ${attempt + 1}/${maxRetries}). Verifying branch and retrying in ${delay}ms...`
-                );
-                await ensureUpdateBranchExists({
-                  octokit,
-                  branchName: updateBranchName,
-                  baseBranch
-                });
-                await new Promise((resolve) => setTimeout(resolve, delay));
-              } else {
-                throw error46;
-              }
-            }
-          }
-          if (lastError) {
-            import_core8.default.warning(`Failed to update file after ${maxRetries} attempts: ${lastError.message}`);
-            throw lastError;
-          }
-          let baselinePr = await findExistingBaselinePr({ octokit, branchName: updateBranchName }) || null;
-          if (!baselinePr) {
-            import_core8.default.info(`No existing PR found for branch ${updateBranchName}, creating new PR...`);
-            import_core8.default.info(`PR details: head=${updateBranchName}, base=${baseBranch}, title="${prTitle}"`);
-            const prResponse = await octokit.rest.pulls.create({
-              owner: import_github.default.context.repo.owner,
-              repo: import_github.default.context.repo.repo,
-              head: updateBranchName,
-              base: baseBranch,
-              title: prTitle,
-              body: prBody
-            });
-            baselinePr = prResponse.data;
-            import_core8.default.info(`Created baseline update PR #${baselinePr.number}: ${baselinePr.html_url}`);
-          } else {
-            import_core8.default.info(
-              `Updated existing baseline PR #${baselinePr.number} (${baselinePr.html_url})`
-            );
-          }
-          import_core8.default.setOutput("baseline-update-pr-number", String(baselinePr.number));
-          import_core8.default.setOutput("baseline-update-pr-url", baselinePr.html_url);
-          import_core8.default.setOutput("baseline-updated", "true");
-        }
+          baselineFileContent,
+          config: config2
+        });
       }
     }
     const existingComment = octokit && prPayload ? await findExistingReportComment(octokit, prPayload) : null;
@@ -42895,7 +42825,7 @@ var runAction = async () => {
     const shouldUpdateExisting = Boolean(existingComment) && !result.stats.hasFailures && commentOnFailure;
     if (octokit && (shouldCommentOnFailure || shouldCommentOnSuccess || shouldUpdateExisting)) {
       const statusText = result.stats.hasFailures ? "Overweight: Size check failed" : "Overweight: Size check passed";
-      import_core8.default.info(
+      import_core12.default.info(
         `Overweight: preparing PR comment (failure=${result.stats.hasFailures}, existingComment=${Boolean(
           existingComment
         )}, forceUpdate=${shouldUpdateExisting})`
@@ -42910,21 +42840,129 @@ ${htmlTable}`,
       });
     }
     if (result.stats.hasFailures) {
-      import_core8.default.setFailed("One or more size checks failed.");
+      import_core12.default.setFailed("One or more size checks failed.");
     }
   } catch (error46) {
-    import_core8.default.warning(`Action failed with error: ${error46.message}`);
+    import_core12.default.warning(`Action failed with error: ${error46.message}`);
     if (error46.status) {
-      import_core8.default.warning(`HTTP status: ${error46.status}`);
+      import_core12.default.warning(`HTTP status: ${error46.status}`);
     }
     if (error46.response) {
-      import_core8.default.warning(`Error response: ${JSON.stringify(error46.response.data || error46.response)}`);
+      import_core12.default.warning(`Error response: ${JSON.stringify(error46.response.data || error46.response)}`);
     }
     if (error46.stack) {
-      import_core8.default.warning(`Stack trace: ${error46.stack}`);
+      import_core12.default.warning(`Stack trace: ${error46.stack}`);
     }
-    import_core8.default.setFailed(error46.message);
+    import_core12.default.setFailed(error46.message);
   }
+};
+var handleBaselineUpdate = async ({
+  octokit,
+  baselinePath,
+  summaryRows,
+  baselineFileContent,
+  config: config2
+}) => {
+  import_core12.default.info(`Checking if baseline update is needed for ${baselinePath}...`);
+  const { needsUpdate, content } = await getBaselineUpdateInfo(
+    baselinePath,
+    summaryRows,
+    baselineFileContent
+  );
+  const currentBranch = getBranchName() || "unknown";
+  const protectedPatterns = parseProtectedBranchPatterns(
+    import_core12.default.getInput("baseline-protected-branches")
+  );
+  const branchIsProtected = isBranchProtected(currentBranch, protectedPatterns);
+  import_core12.default.info(
+    `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate}, protected=${branchIsProtected})`
+  );
+  if (!needsUpdate) {
+    import_core12.default.info("Baseline is already up to date; no changes written.");
+    return;
+  }
+  if (branchIsProtected) {
+    import_core12.default.info(
+      `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
+    );
+    return;
+  }
+  import_core12.default.info("Resolving base branch for baseline update...");
+  const baseBranch = await resolveBaseBranch(octokit);
+  import_core12.default.info(`Resolved base branch: ${baseBranch}`);
+  const prTitleInput = import_core12.default.getInput("update-pr-title") || "chore: update baseline report";
+  const prTitle = `${prTitleInput} (\u{1F9F3} Overweight Guard)`;
+  const prBody = import_core12.default.getInput("update-pr-body") || "Automatic pull request updating the baseline report.";
+  const branchPrefix = import_core12.default.getInput("update-branch-prefix") || "overweight/baseline";
+  import_core12.default.info(`Determining PR identifier for branch ${currentBranch}...`);
+  let prIdentifier = import_github3.default.context.payload.pull_request?.number ?? null;
+  if (!prIdentifier) {
+    try {
+      prIdentifier = await findPrNumberForBranch({ octokit, branch: currentBranch });
+      if (prIdentifier) {
+        import_core12.default.info(
+          `Detected existing pull request #${prIdentifier} for branch ${currentBranch}.`
+        );
+      }
+    } catch (error46) {
+      import_core12.default.warning(
+        `Unable to infer pull request number for branch ${currentBranch}: ${error46.message}`
+      );
+    }
+  }
+  const updateBranchName = buildUpdateBranchName({
+    prefix: branchPrefix,
+    prNumber: prIdentifier,
+    currentBranch
+  });
+  const repoRelativePath = ensureRelativePath(baselinePath);
+  import_core12.default.info(`Preparing to update baseline on branch: ${updateBranchName} (base: ${baseBranch})`);
+  import_core12.default.info(`Baseline file path: ${repoRelativePath}`);
+  await ensureUpdateBranchExists({
+    octokit,
+    branchName: updateBranchName,
+    baseBranch
+  });
+  const existingFileSha = await getExistingFileSha({
+    octokit,
+    branchName: updateBranchName,
+    path: repoRelativePath
+  });
+  await writeBaseline(baselinePath, summaryRows, content);
+  import_core12.default.info(`Wrote updated baseline snapshot to ${baselinePath} (${content.length} bytes)`);
+  const fileContentBase64 = Buffer$1.from(content, "utf-8").toString("base64");
+  import_core12.default.info(`Attempting to update file ${repoRelativePath} on branch ${updateBranchName}${existingFileSha ? ` (existing SHA: ${existingFileSha})` : " (new file)"}...`);
+  await createOrUpdateFileContents({
+    octokit,
+    branchName: updateBranchName,
+    path: repoRelativePath,
+    content: fileContentBase64,
+    message: prTitle,
+    existingSha: existingFileSha,
+    ensureBranchExists,
+    baseBranch
+  });
+  let baselinePr = await findExistingBaselinePr({ octokit, branchName: updateBranchName }) || null;
+  if (!baselinePr) {
+    import_core12.default.info(`No existing PR found for branch ${updateBranchName}, creating new PR...`);
+    baselinePr = await createPullRequest({
+      octokit,
+      head: updateBranchName,
+      base: baseBranch,
+      title: prTitle,
+      body: prBody
+    });
+  } else {
+    import_core12.default.info(
+      `Updated existing baseline PR #${baselinePr.number} (${baselinePr.html_url})`
+    );
+  }
+  import_core12.default.setOutput("baseline-update-pr-number", String(baselinePr.number));
+  import_core12.default.setOutput("baseline-update-pr-url", baselinePr.html_url);
+  import_core12.default.setOutput("baseline-updated", "true");
+};
+var ensureBranchExists = async ({ octokit, branchName, baseBranch }) => {
+  return ensureUpdateBranchExists({ octokit, branchName, baseBranch });
 };
 var action_default = runAction;
 if (process.env.NODE_ENV !== "test") {

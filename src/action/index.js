@@ -1,508 +1,44 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { Buffer } from "node:buffer";
 
 import core from "@actions/core";
 import github from "@actions/github";
 
-import { loadConfig, normalizeConfig } from "../config/load-config.js";
+import { resolveConfig } from "./config.js";
 import { runChecks } from "../core/run-checks.js";
 import { jsonFileReporter } from "../reporters/json-file-reporter.js";
-import { formatDiff } from "../utils/size.js";
-
-const BOT_COMMIT_IDENTITY = {
-  name: "Overweight Bot",
-  email: "ci-bot@overweight-gh-action.com"
-};
-
-const statusEmoji = (row) => {
-  if (row.error) {
-    return "💥";
-  }
-
-  return row.status === "pass" ? "🟢" : "🔺";
-};
-
-const buildSummaryRows = (results) =>
-  results.map((entry) => ({
-    label: entry.label,
-    file: entry.filePath,
-    tester: entry.testerLabel,
-    size: entry.sizeFormatted,
-    sizeBytes: typeof entry.size === "number" ? entry.size : 0,
-    limit: entry.maxSizeFormatted,
-    limitBytes: entry.maxSize,
-    diff: entry.diffFormatted,
-    diffBytes: typeof entry.diff === "number" ? entry.diff : 0,
-    status: entry.error ? "error" : entry.passed ? "pass" : "fail",
-    error: entry.error || null
-  }));
-
-const readBaselineState = async (baselinePath) => {
-  try {
-    const raw = await fs.readFile(baselinePath, "utf-8");
-    let data = null;
-
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      data = null;
-    }
-
-    return { raw, data };
-  } catch {
-    return { raw: null, data: null };
-  }
-};
-
-const buildBaselineSnapshot = (rows) =>
-  [...rows]
-    .map((row) => ({
-      label: row.label,
-      file: row.file,
-      tester: row.tester,
-      size: row.size,
-      sizeBytes: row.sizeBytes,
-      limit: row.limit,
-      limitBytes: row.limitBytes
-    }))
-    .sort((a, b) => a.file.localeCompare(b.file));
-
-const serializeBaselineSnapshot = (rows) => JSON.stringify(buildBaselineSnapshot(rows), null, 2);
-
-const writeBaseline = async (baselinePath, rows, precomputedContent) => {
-  await fs.mkdir(path.dirname(baselinePath), { recursive: true });
-  const content = precomputedContent ?? serializeBaselineSnapshot(rows);
-  await fs.writeFile(baselinePath, content);
-};
-
-const getBaselineUpdateInfo = async (baselinePath, rows, previousContent = undefined) => {
-  const nextContent = serializeBaselineSnapshot(rows);
-
-  if (previousContent !== undefined) {
-    return {
-      needsUpdate: previousContent === null ? true : previousContent !== nextContent,
-      content: nextContent
-    };
-  }
-
-  try {
-    const currentContent = await fs.readFile(baselinePath, "utf-8");
-    return { needsUpdate: currentContent !== nextContent, content: nextContent };
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return { needsUpdate: true, content: nextContent };
-    }
-
-    throw error;
-  }
-};
-
-const mergeWithBaseline = (rows, baseline) => {
-  if (!baseline) {
-    return rows;
-  }
-
-  const map = new Map(baseline.map((row) => [row.file, row]));
-
-  return rows.map((row) => {
-    const previous = map.get(row.file);
-
-    if (!previous) {
-      return { ...row, baselineSize: "N/A", baselineDiff: "N/A", trend: "N/A" };
-    }
-
-    const delta = row.sizeBytes - (previous.sizeBytes || 0);
-
-    return {
-      ...row,
-      baselineSize: previous.size,
-      baselineDiff: formatDiff(delta),
-      trend: delta === 0 ? "➖" : delta > 0 ? "🔺" : "⬇"
-    };
-  });
-};
-
-const toTableData = (rows) => [
-  [
-    { data: "Status", header: true },
-    { data: "Label", header: true },
-    { data: "File", header: true },
-    { data: "Size", header: true },
-    { data: "Limit", header: true },
-    { data: "Δ", header: true },
-    { data: "Trend", header: true }
-  ],
-  ...rows.map((row) => [
-    { data: statusEmoji(row) },
-    { data: row.label },
-    { data: row.file },
-    { data: row.size },
-    { data: row.limit },
-    { data: row.diff },
-    { data: row.trend || "N/A" }
-  ])
-];
-
-const renderHtmlTable = (rows) => {
-  const header = ["Status", "Label", "File", "Size", "Limit", "Δ", "Trend"]
-    .map((title) => `<th>${title}</th>`)
-    .join("");
-  const body = rows
-    .map(
-      (row) =>
-        `<tr><td>${statusEmoji(row)}</td><td>${row.label}</td><td>${row.file}</td><td>${row.size}</td><td>${row.limit}</td><td>${row.diff}</td><td>${row.trend || "N/A"}</td></tr>`
-    )
-    .join("");
-
-  return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
-};
-
-const buildInlineConfig = (input) => {
-  if (!input) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(input);
-    return Array.isArray(parsed) ? { files: parsed } : parsed;
-  } catch (error) {
-    throw new Error(`Failed to parse \`files\` input: ${error.message}`);
-  }
-};
-
-const resolveWorkingDirectory = (input) =>
-  input ? path.resolve(process.cwd(), input) : process.cwd();
-
-const DEFAULT_PROTECTED_BRANCHES = ["main", "master"];
-
-const parseProtectedBranchPatterns = (input) => {
-  const raw = input && input.trim().length ? input : DEFAULT_PROTECTED_BRANCHES.join(",");
-
-  return raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-};
-
-const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const patternToRegex = (pattern) =>
-  new RegExp(`^${pattern.split("*").map((segment) => escapeRegex(segment)).join(".*")}$`);
-
-const branchMatchesPattern = (branch, pattern) => {
-  if (!pattern || !branch) {
-    return false;
-  }
-
-  return patternToRegex(pattern).test(branch);
-};
-
-const isBranchProtected = (branch, patterns) =>
-  Boolean(branch) && patterns.some((pattern) => branchMatchesPattern(branch, pattern));
-
-const getWorkspaceRoot = () => process.env.GITHUB_WORKSPACE || process.cwd();
-
-const ensureRelativePath = (absolutePath) => {
-  const workspaceRoot = getWorkspaceRoot();
-  const relative = path.relative(workspaceRoot, absolutePath);
-
-  if (relative.startsWith("..")) {
-    throw new Error(
-      `Baseline path "${absolutePath}" is outside of the repository checkout (${workspaceRoot}).`
-    );
-  }
-
-  return relative.replace(/\\/g, "/");
-};
-
-const sanitizeBranchPrefix = (prefix) =>
-  `${prefix || "overweight/baseline"}`.replace(/\/+$/, "");
-
-const sanitizeBranchSuffix = (suffix) =>
-  suffix ? suffix.replace(/[^0-9A-Za-z._-]+/g, "-") : "";
-
-const buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
-  const suffix =
-    prNumber != null
-      ? `pr-${prNumber}`
-      : sanitizeBranchSuffix(currentBranch) || `run-${github.context.runId || Date.now()}`;
-
-  return `${sanitizeBranchPrefix(prefix)}/${suffix}`;
-};
-
-const resolveBaseBranch = async (octokit) => {
-  if (github.context.payload.pull_request?.base?.ref) {
-    core.info(`base branch is ${github.context.payload.pull_request.base.ref}`);
-    return github.context.payload.pull_request.base.ref;
-  }
-
-  if (octokit) {
-    try {
-      const { owner, repo } = github.context.repo;
-      const repoInfo = await octokit.rest.repos.get({
-        owner,
-        repo
-      });
-
-      core.info(`base branch is ${repoInfo.data.default_branch}`);
-      return repoInfo.data.default_branch;
-    } catch (error) {
-      core.warning(
-        `Unable to fetch default branch from repository: ${error.message}. Falling back to "main".`
-      );
-    }
-  }
-
-  core.warning("Falling back to 'main' as base branch.");
-  return "main";
-};
-
-const ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
-  const { owner, repo } = github.context.repo;
-
-  core.info(`Checking if branch ${branchName} exists...`);
-  try {
-    const branchRef = await octokit.rest.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${branchName}`
-    });
-    const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
-    core.info(`Branch ${branchName} already exists at SHA: ${branchSha}`);
-    return true;
-  } catch (error) {
-    if (error.status !== 404) {
-      core.warning(`Failed to check if branch ${branchName} exists: ${error.message}`);
-      throw error;
-    }
-    core.info(`Branch ${branchName} does not exist (404), will create it from ${baseBranch}`);
-  }
-
-  core.info(`Fetching base branch ${baseBranch} to create ${branchName}...`);
-  const baseRef = await octokit.rest.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${baseBranch}`
-  });
-
-  const baseSha = baseRef.data.object?.sha || baseRef.data.sha;
-  core.info(`Base branch ${baseBranch} SHA: ${baseSha}`);
-
-  try {
-    core.info(`Creating branch ${branchName} from ${baseBranch} (${baseSha})...`);
-    await octokit.rest.git.createRef({
-      owner,
-      repo,
-      ref: `refs/heads/${branchName}`,
-      sha: baseSha
-    });
-    core.info(`Successfully created branch ${branchName}`);
-  } catch (error) {
-    if (error.status === 422) {
-      core.info(`Branch ${branchName} already exists (422), verifying it's accessible...`);
-    } else {
-      core.warning(`Failed to create branch ${branchName}: ${error.message} (status: ${error.status})`);
-      throw error;
-    }
-  }
-
-  // Verify the branch is accessible by retrying getRef with exponential backoff
-  core.info(`Verifying branch ${branchName} is accessible...`);
-  const maxRetries = 5;
-  const baseDelay = 500; // 500ms
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const branchRef = await octokit.rest.git.getRef({
-        owner,
-        repo,
-        ref: `heads/${branchName}`
-      });
-      const branchSha = branchRef.data.object?.sha || branchRef.data.sha;
-      core.info(`Branch ${branchName} verified and accessible at SHA: ${branchSha}`);
-      return true;
-    } catch (error) {
-      if (error.status === 404) {
-        if (attempt < maxRetries - 1) {
-          const delay = baseDelay * Math.pow(2, attempt);
-          core.info(`Branch ${branchName} not yet accessible (404), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        } else {
-          core.warning(`Branch ${branchName} still not accessible after ${maxRetries} attempts`);
-          throw new Error(`Branch ${branchName} was created but is not accessible after multiple retries`);
-        }
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  return true;
-};
-
-const getExistingFileSha = async ({ octokit, branchName, path: repoPath }) => {
-  const { owner, repo } = github.context.repo;
-
-  core.info(`Checking for existing file ${repoPath} on branch ${branchName}...`);
-  try {
-    const response = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path: repoPath,
-      ref: branchName
-    });
-
-    if (!Array.isArray(response.data) && response.data.type === "file") {
-      core.info(`Found existing file ${repoPath} on branch ${branchName} with SHA: ${response.data.sha}`);
-      return response.data.sha;
-    }
-
-    core.info(`File ${repoPath} exists on branch ${branchName} but is not a file (type: ${response.data?.type || "unknown"})`);
-    return undefined;
-  } catch (error) {
-    if (error.status === 404) {
-      core.info(`File ${repoPath} does not exist on branch ${branchName} (404), will create new file`);
-      return undefined;
-    }
-
-    core.warning(`Failed to check for existing file ${repoPath} on branch ${branchName}: ${error.message} (status: ${error.status})`);
-    throw error;
-  }
-};
-
-const findExistingBaselinePr = async ({ octokit, branchName }) => {
-  const { owner, repo } = github.context.repo;
-
-  core.info(`Searching for existing open PRs for branch ${branchName}...`);
-  const prs = await octokit.rest.pulls.list({
-    owner,
-    repo,
-    head: `${owner}:${branchName}`,
-    state: "open",
-    per_page: 1
-  });
-
-  const existingPr = prs.data?.[0] || null;
-  if (existingPr) {
-    core.info(`Found existing PR #${existingPr.number} for branch ${branchName}: ${existingPr.html_url}`);
-  } else {
-    core.info(`No existing open PR found for branch ${branchName}`);
-  }
-
-  return existingPr;
-};
-
-const findPrNumberForBranch = async ({ octokit, branch }) => {
-  if (!branch) {
-    core.info("No branch provided to findPrNumberForBranch");
-    return null;
-  }
-
-  const { owner, repo } = github.context.repo;
-  core.info(`Searching for PR number for branch ${branch}...`);
-  const prs = await octokit.rest.pulls.list({
-    owner,
-    repo,
-    head: `${owner}:${branch}`,
-    state: "open",
-    per_page: 1
-  });
-
-  const pr = prs.data?.[0];
-  if (pr) {
-    core.info(`Found PR #${pr.number} for branch ${branch}`);
-  } else {
-    core.info(`No open PR found for branch ${branch}`);
-  }
-  return pr?.number ?? null;
-};
-
-const resolveConfig = async () => {
-  const configInput = core.getInput("config");
-  const filesInput = core.getInput("files");
-  const cwd = resolveWorkingDirectory(core.getInput("working-directory"));
-  const inlineConfig = buildInlineConfig(filesInput);
-
-  if (inlineConfig) {
-    return normalizeConfig(inlineConfig, { cwd, source: { type: "inline" } });
-  }
-
-  return loadConfig({ cwd, configPath: configInput || undefined });
-};
-
-const REPORT_MARKER = "<!-- overweight-report -->";
-
-const findExistingReportComment = async (octokit, pullRequest) => {
-  const { owner, repo } = github.context.repo;
-  const existingComments = await octokit.rest.issues.listComments({
-    owner,
-    repo,
-    issue_number: pullRequest.number,
-    per_page: 100
-  });
-
-  const existing = existingComments.data
-    .filter((comment) => comment?.user?.type === "Bot" && comment?.body?.includes(REPORT_MARKER))
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
-
-  return existing || null;
-};
-
-const commentOnPullRequest = async ({ octokit, pullRequest, body, existingComment }) => {
-  if (!pullRequest) {
-    core.info("No pull request found in the event payload; skipping comment.");
-    return;
-  }
-
-  const isFork =
-    pullRequest.head?.repo?.full_name &&
-    pullRequest.base?.repo?.full_name &&
-    pullRequest.head.repo.full_name !== pullRequest.base.repo.full_name;
-
-  if (isFork) {
-    core.info("Skipping pull request comment because the PR originates from a fork.");
-    return;
-  }
-
-  const previous =
-    existingComment !== undefined
-      ? existingComment
-      : await findExistingReportComment(octokit, pullRequest);
-
-  const commentBody = `${REPORT_MARKER}\n${body}`;
-
-  try {
-    if (previous) {
-      await octokit.rest.issues.updateComment({
-        owner: github.context.repo.owner,
-        repo: github.context.repo.repo,
-        comment_id: previous.id,
-        body: commentBody
-      });
-    } else {
-      await octokit.rest.issues.createComment({
-        repo: github.context.repo.repo,
-        owner: github.context.repo.owner,
-        issue_number: pullRequest.number,
-        body: commentBody
-      });
-    }
-  } catch (error) {
-    if (error.status === 403) {
-      core.warning(
-        `Unable to comment on pull request due to permissions (403). Message: ${error.message}`
-      );
-      return;
-    }
-
-    throw error;
-  }
-};
-
-const getBranchName = () =>
-  process.env.GITHUB_REF_NAME || process.env.GITHUB_REF?.split("/").pop() || "";
-
+import { buildSummaryRows, toTableData, renderHtmlTable } from "./report.js";
+import {
+  readBaselineState,
+  writeBaseline,
+  getBaselineUpdateInfo,
+  mergeWithBaseline,
+  ensureRelativePath
+} from "./baseline.js";
+import {
+  resolveBaseBranch,
+  parseProtectedBranchPatterns,
+  isBranchProtected,
+  getBranchName,
+  buildUpdateBranchName
+} from "./branch.js";
+import { ensureUpdateBranchExists } from "./git.js";
+import {
+  getExistingFileSha,
+  createOrUpdateFileContents,
+  findExistingBaselinePr,
+  findPrNumberForBranch,
+  createPullRequest,
+  findExistingReportComment,
+  commentOnPullRequest
+} from "./github.js";
+
+/**
+ * Main action orchestrator
+ */
 export const runAction = async () => {
   try {
+    // Load configuration
     const config = await resolveConfig();
     const githubToken = core.getInput("github-token");
     const octokit = githubToken ? github.getOctokit(githubToken) : null;
@@ -511,9 +47,12 @@ export const runAction = async () => {
     const commentOnEachRun = core.getBooleanInput("comment-on-pr-each-run");
     const prPayload = github.context.payload.pull_request;
     const prAction = github.context.payload.action;
+
+    // Run size checks
     const result = await runChecks(config);
     const baseRows = buildSummaryRows(result.results);
 
+    // Handle baseline configuration
     const reportFileInput = core.getInput("report-file") || "overweight-report.json";
     const updateBaseline = core.getBooleanInput("update-baseline");
     const baselineReportPathInput = core.getInput("baseline-report-path");
@@ -534,6 +73,8 @@ export const runAction = async () => {
     const baselineData = baselineState?.data ?? null;
     const baselineFileContent = baselineState ? baselineState.raw : undefined;
     const summaryRows = mergeWithBaseline(baseRows, baselineData);
+
+    // Generate report file
     jsonFileReporter(result, {
       reportFile: reportFileInput,
       cwd: config.root,
@@ -541,6 +82,7 @@ export const runAction = async () => {
     });
     const resolvedReportPath = path.resolve(config.root, reportFileInput);
 
+    // Generate summary and outputs
     core.info(
       `Overweight: processed ${result.results.length} entries (failures: ${result.stats.hasFailures})`
     );
@@ -555,6 +97,7 @@ export const runAction = async () => {
     core.setOutput("has-failures", String(result.stats.hasFailures));
     core.setOutput("report-file", resolvedReportPath);
 
+    // Handle baseline update if needed
     if (baselinePath) {
       if (result.stats.hasFailures) {
         core.info("Skipping baseline update because size checks failed.");
@@ -563,162 +106,17 @@ export const runAction = async () => {
       } else if (!githubToken || !octokit) {
         core.setFailed("update-baseline requires github-token to be provided.");
       } else {
-        core.info(`Checking if baseline update is needed for ${baselinePath}...`);
-        const { needsUpdate, content } = await getBaselineUpdateInfo(
+        await handleBaselineUpdate({
+          octokit,
           baselinePath,
           summaryRows,
-          baselineFileContent
-        );
-        const currentBranch = getBranchName() || "unknown";
-        const protectedPatterns = parseProtectedBranchPatterns(
-          core.getInput("baseline-protected-branches")
-        );
-        const branchIsProtected = isBranchProtected(currentBranch, protectedPatterns);
-
-        core.info(
-          `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate}, protected=${branchIsProtected})`
-        );
-
-        if (!needsUpdate) {
-          core.info("Baseline is already up to date; no changes written.");
-        }
-        else if (branchIsProtected) {
-          core.info(
-            `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
-          );
-        } else {
-          core.info("Resolving base branch for baseline update...");
-          const baseBranch = await resolveBaseBranch(octokit);
-          core.info(`Resolved base branch: ${baseBranch}`);
-          
-          const prTitleInput = core.getInput("update-pr-title") || "chore: update baseline report";
-          const prTitle = `${prTitleInput} (🧳 Overweight Guard)`;
-          const prBody =
-            core.getInput("update-pr-body") ||
-            "Automatic pull request updating the baseline report.";
-          const branchPrefix = core.getInput("update-branch-prefix") || "overweight/baseline";
-          
-          core.info(`Determining PR identifier for branch ${currentBranch}...`);
-          let prIdentifier = github.context.payload.pull_request?.number ?? null;
-
-          if (!prIdentifier) {
-            try {
-              prIdentifier = await findPrNumberForBranch({ octokit, branch: currentBranch });
-              if (prIdentifier) {
-                core.info(
-                  `Detected existing pull request #${prIdentifier} for branch ${currentBranch}.`
-                );
-              }
-            } catch (error) {
-              core.warning(
-                `Unable to infer pull request number for branch ${currentBranch}: ${error.message}`
-              );
-            }
-          }
-
-          const updateBranchName = buildUpdateBranchName({
-            prefix: branchPrefix,
-            prNumber: prIdentifier,
-            currentBranch
-          });
-          const repoRelativePath = ensureRelativePath(baselinePath);
-
-          core.info(`Preparing to update baseline on branch: ${updateBranchName} (base: ${baseBranch})`);
-          core.info(`Baseline file path: ${repoRelativePath}`);
-
-          await ensureUpdateBranchExists({
-            octokit,
-            branchName: updateBranchName,
-            baseBranch
-          });
-
-          const existingFileSha = await getExistingFileSha({
-            octokit,
-            branchName: updateBranchName,
-            path: repoRelativePath
-          });
-
-          await writeBaseline(baselinePath, summaryRows, content);
-          core.info(`Wrote updated baseline snapshot to ${baselinePath} (${content.length} bytes)`);
-
-          const fileContentBase64 = Buffer.from(content, "utf-8").toString("base64");
-          core.info(`Attempting to update file ${repoRelativePath} on branch ${updateBranchName}${existingFileSha ? ` (existing SHA: ${existingFileSha})` : " (new file)"}...`);
-
-          // Retry file update with exponential backoff if branch not found
-          const maxRetries = 5;
-          const baseDelay = 1000; // 1 second
-          let lastError = null;
-
-          for (let attempt = 0; attempt < maxRetries; attempt++) {
-            try {
-              await octokit.rest.repos.createOrUpdateFileContents({
-                owner: github.context.repo.owner,
-                repo: github.context.repo.repo,
-                path: repoRelativePath,
-                message: prTitle,
-                content: fileContentBase64,
-                branch: updateBranchName,
-                sha: existingFileSha,
-                committer: BOT_COMMIT_IDENTITY,
-                author: BOT_COMMIT_IDENTITY
-              });
-              core.info(`Successfully updated file ${repoRelativePath} on branch ${updateBranchName}`);
-              lastError = null;
-              break;
-            } catch (error) {
-              lastError = error;
-              if (error.status === 404 && error.message?.includes("Branch") && attempt < maxRetries - 1) {
-                const delay = baseDelay * Math.pow(2, attempt);
-                core.warning(
-                  `Branch ${updateBranchName} not found when updating file (attempt ${attempt + 1}/${maxRetries}). Verifying branch and retrying in ${delay}ms...`
-                );
-                // Verify branch exists before retrying
-                await ensureUpdateBranchExists({
-                  octokit,
-                  branchName: updateBranchName,
-                  baseBranch
-                });
-                await new Promise((resolve) => setTimeout(resolve, delay));
-              } else {
-                throw error;
-              }
-            }
-          }
-
-          if (lastError) {
-            core.warning(`Failed to update file after ${maxRetries} attempts: ${lastError.message}`);
-            throw lastError;
-          }
-
-          let baselinePr =
-            (await findExistingBaselinePr({ octokit, branchName: updateBranchName })) || null;
-
-          if (!baselinePr) {
-            core.info(`No existing PR found for branch ${updateBranchName}, creating new PR...`);
-            core.info(`PR details: head=${updateBranchName}, base=${baseBranch}, title="${prTitle}"`);
-            const prResponse = await octokit.rest.pulls.create({
-              owner: github.context.repo.owner,
-              repo: github.context.repo.repo,
-              head: updateBranchName,
-              base: baseBranch,
-              title: prTitle,
-              body: prBody
-            });
-            baselinePr = prResponse.data;
-            core.info(`Created baseline update PR #${baselinePr.number}: ${baselinePr.html_url}`);
-          } else {
-            core.info(
-              `Updated existing baseline PR #${baselinePr.number} (${baselinePr.html_url})`
-            );
-          }
-
-          core.setOutput("baseline-update-pr-number", String(baselinePr.number));
-          core.setOutput("baseline-update-pr-url", baselinePr.html_url);
-          core.setOutput("baseline-updated", "true");
-        }
+          baselineFileContent,
+          config
+        });
       }
     }
 
+    // Handle PR comments
     const existingComment =
       octokit && prPayload ? await findExistingReportComment(octokit, prPayload) : null;
 
@@ -766,9 +164,158 @@ export const runAction = async () => {
   }
 };
 
+/**
+ * Handle baseline update workflow
+ * @param {Object} params
+ * @param {Object} params.octokit - GitHub Octokit instance
+ * @param {string} params.baselinePath - Path to baseline file
+ * @param {Array} params.summaryRows - Summary rows
+ * @param {string|undefined} params.baselineFileContent - Existing baseline content
+ * @param {Object} params.config - Config object
+ */
+const handleBaselineUpdate = async ({
+  octokit,
+  baselinePath,
+  summaryRows,
+  baselineFileContent,
+  config
+}) => {
+  core.info(`Checking if baseline update is needed for ${baselinePath}...`);
+  const { needsUpdate, content } = await getBaselineUpdateInfo(
+    baselinePath,
+    summaryRows,
+    baselineFileContent
+  );
+  const currentBranch = getBranchName() || "unknown";
+  const protectedPatterns = parseProtectedBranchPatterns(
+    core.getInput("baseline-protected-branches")
+  );
+  const branchIsProtected = isBranchProtected(currentBranch, protectedPatterns);
+
+  core.info(
+    `Overweight: baseline path detected at ${baselinePath} (branch=${currentBranch}, needsUpdate=${needsUpdate}, protected=${branchIsProtected})`
+  );
+
+  if (!needsUpdate) {
+    core.info("Baseline is already up to date; no changes written.");
+    return;
+  }
+
+  if (branchIsProtected) {
+    core.info(
+      `Skipping baseline update because branch "${currentBranch}" matches baseline-protected-branches.`
+    );
+    return;
+  }
+
+  // Resolve base branch
+  core.info("Resolving base branch for baseline update...");
+  const baseBranch = await resolveBaseBranch(octokit);
+  core.info(`Resolved base branch: ${baseBranch}`);
+  
+  // Prepare PR details
+  const prTitleInput = core.getInput("update-pr-title") || "chore: update baseline report";
+  const prTitle = `${prTitleInput} (🧳 Overweight Guard)`;
+  const prBody =
+    core.getInput("update-pr-body") ||
+    "Automatic pull request updating the baseline report.";
+  const branchPrefix = core.getInput("update-branch-prefix") || "overweight/baseline";
+  
+  // Determine PR identifier
+  core.info(`Determining PR identifier for branch ${currentBranch}...`);
+  let prIdentifier = github.context.payload.pull_request?.number ?? null;
+
+  if (!prIdentifier) {
+    try {
+      prIdentifier = await findPrNumberForBranch({ octokit, branch: currentBranch });
+      if (prIdentifier) {
+        core.info(
+          `Detected existing pull request #${prIdentifier} for branch ${currentBranch}.`
+        );
+      }
+    } catch (error) {
+      core.warning(
+        `Unable to infer pull request number for branch ${currentBranch}: ${error.message}`
+      );
+    }
+  }
+
+  const updateBranchName = buildUpdateBranchName({
+    prefix: branchPrefix,
+    prNumber: prIdentifier,
+    currentBranch
+  });
+  const repoRelativePath = ensureRelativePath(baselinePath);
+
+  core.info(`Preparing to update baseline on branch: ${updateBranchName} (base: ${baseBranch})`);
+  core.info(`Baseline file path: ${repoRelativePath}`);
+
+  // Ensure branch exists
+  await ensureUpdateBranchExists({
+    octokit,
+    branchName: updateBranchName,
+    baseBranch
+  });
+
+  // Get existing file SHA if it exists
+  const existingFileSha = await getExistingFileSha({
+    octokit,
+    branchName: updateBranchName,
+    path: repoRelativePath
+  });
+
+  // Write baseline to disk
+  await writeBaseline(baselinePath, summaryRows, content);
+  core.info(`Wrote updated baseline snapshot to ${baselinePath} (${content.length} bytes)`);
+
+  // Update file on GitHub
+  const fileContentBase64 = Buffer.from(content, "utf-8").toString("base64");
+  core.info(`Attempting to update file ${repoRelativePath} on branch ${updateBranchName}${existingFileSha ? ` (existing SHA: ${existingFileSha})` : " (new file)"}...`);
+
+  await createOrUpdateFileContents({
+    octokit,
+    branchName: updateBranchName,
+    path: repoRelativePath,
+    content: fileContentBase64,
+    message: prTitle,
+    existingSha: existingFileSha,
+    ensureBranchExists,
+    baseBranch
+  });
+
+  // Find or create PR
+  let baselinePr =
+    (await findExistingBaselinePr({ octokit, branchName: updateBranchName })) || null;
+
+  if (!baselinePr) {
+    core.info(`No existing PR found for branch ${updateBranchName}, creating new PR...`);
+    baselinePr = await createPullRequest({
+      octokit,
+      head: updateBranchName,
+      base: baseBranch,
+      title: prTitle,
+      body: prBody
+    });
+  } else {
+    core.info(
+      `Updated existing baseline PR #${baselinePr.number} (${baselinePr.html_url})`
+    );
+  }
+
+  core.setOutput("baseline-update-pr-number", String(baselinePr.number));
+  core.setOutput("baseline-update-pr-url", baselinePr.html_url);
+  core.setOutput("baseline-updated", "true");
+};
+
+/**
+ * Wrapper for ensureUpdateBranchExists to match createOrUpdateFileContents signature
+ */
+const ensureBranchExists = async ({ octokit, branchName, baseBranch }) => {
+  return ensureUpdateBranchExists({ octokit, branchName, baseBranch });
+};
+
 export default runAction;
 
 if (process.env.NODE_ENV !== "test") {
   runAction();
 }
-
