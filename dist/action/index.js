@@ -42481,6 +42481,7 @@ var ensureRelativePath = (absolutePath) => {
 var import_core9 = __toESM(require_core(), 1);
 var import_github = __toESM(require_github(), 1);
 var DEFAULT_PROTECTED_BRANCHES = ["main", "master"];
+var SHORT_REF_PREFIX = "heads/";
 var resolveBaseBranch = async (octokit) => {
   if (import_github.default.context.payload.pull_request?.base?.ref) {
     import_core9.default.info(`base branch is ${import_github.default.context.payload.pull_request.base.ref}`);
@@ -42533,6 +42534,40 @@ var buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
   const suffix = prNumber != null ? `pr-${prNumber}` : sanitizeBranchSuffix(currentBranch) || `run-${import_github.default.context.runId || Date.now()}`;
   return `${sanitizeBranchPrefix(prefix)}/${suffix}`;
 };
+var flattenBranchName = (branchName) => branchName.split("/").filter(Boolean).join("-").replace(/-+/g, "-");
+var ensureCreatableBranchName = async ({ octokit, branchName }) => {
+  if (!octokit || !branchName || !branchName.includes("/")) {
+    return branchName;
+  }
+  const segments = branchName.split("/").filter(Boolean);
+  if (segments.length <= 1) {
+    return branchName;
+  }
+  const { owner, repo } = import_github.default.context.repo;
+  let prefixSegments = [];
+  for (let i = 0; i < segments.length - 1; i++) {
+    prefixSegments.push(segments[i]);
+    const prefix = prefixSegments.join("/");
+    try {
+      await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: `${SHORT_REF_PREFIX}${prefix}`
+      });
+      const fallbackName = flattenBranchName(branchName);
+      import_core9.default.info(
+        `Branch prefix "${prefix}" already exists. Using fallback branch name "${fallbackName}".`
+      );
+      return fallbackName;
+    } catch (error46) {
+      if (error46.status === 404) {
+        continue;
+      }
+      throw error46;
+    }
+  }
+  return branchName;
+};
 
 // src/action/git.js
 var import_core10 = __toESM(require_core(), 1);
@@ -42541,15 +42576,15 @@ var MAX_CREATION_ATTEMPTS = 2;
 var MAX_VERIFICATION_ATTEMPTS = 7;
 var VERIFICATION_BASE_DELAY_MS = 500;
 var BRANCH_REF_PREFIX = "refs/heads/";
-var SHORT_REF_PREFIX = "heads/";
+var SHORT_REF_PREFIX2 = "heads/";
 var resolveRefSha = (response) => response.data.object?.sha || response.data.sha;
 var ensureUpdateBranchExists = async ({ octokit, branchName, baseBranch }) => {
   if (!octokit) {
     throw new Error("ensureUpdateBranchExists requires an authenticated octokit client.");
   }
   const { owner, repo } = import_github2.default.context.repo;
-  const branchRef = `${SHORT_REF_PREFIX}${branchName}`;
-  const baseRef = `${SHORT_REF_PREFIX}${baseBranch}`;
+  const branchRef = `${SHORT_REF_PREFIX2}${branchName}`;
+  const baseRef = `${SHORT_REF_PREFIX2}${baseBranch}`;
   const fullBranchRef = `${BRANCH_REF_PREFIX}${branchName}`;
   import_core10.default.info(`Checking if branch ${branchName} exists via GitHub API...`);
   try {
@@ -43029,11 +43064,17 @@ var handleBaselineUpdate = async ({
       );
     }
   }
-  const updateBranchName = buildUpdateBranchName({
+  let updateBranchName = buildUpdateBranchName({
     prefix: branchPrefix,
     prNumber: prIdentifier,
     currentBranch
   });
+  if (octokit) {
+    updateBranchName = await ensureCreatableBranchName({
+      octokit,
+      branchName: updateBranchName
+    });
+  }
   const repoRelativePath = ensureRelativePath(baselinePath);
   import_core12.default.info(`Preparing to update baseline on branch: ${updateBranchName} (base: ${baseBranch})`);
   import_core12.default.info(`Baseline file path: ${repoRelativePath}`);

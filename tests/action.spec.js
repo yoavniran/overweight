@@ -318,6 +318,8 @@ describe("GitHub Action integration", () => {
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     octokitMock.rest.git.getRef
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/test
       .mockRejectedValueOnce(createNotFoundError()) // branch check
       .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }) // fetch base
       .mockResolvedValueOnce({ data: { object: { sha: "new-branch-sha" } } }); // verification
@@ -360,6 +362,35 @@ describe("GitHub Action integration", () => {
     );
   });
 
+  it("falls back to a flattened update branch when a prefix already exists", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "overweight";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+    octokitMock.rest.git.getRef
+      .mockResolvedValueOnce({ data: { object: { sha: "prefix-overweight-sha" } } }) // prefix exists
+      .mockRejectedValueOnce(createNotFoundError()) // flattened branch check
+      .mockResolvedValueOnce({ data: { object: { sha: "base-sha" } } }) // base fetch
+      .mockResolvedValueOnce({ data: { object: { sha: "new-branch-sha" } } }); // verification
+    octokitMock.rest.repos.getContent.mockRejectedValueOnce(createNotFoundError());
+
+    await runAction();
+
+    expect(octokitMock.rest.git.createRef).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ref: "refs/heads/overweight-baseline-pr-7",
+        sha: "base-sha"
+      })
+    );
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: "overweight-baseline-pr-7" })
+    );
+  });
+
   it("includes the existing file sha when creating the baseline update branch", async () => {
     mockRunResult.stats.hasFailures = false;
     process.env.GITHUB_REF_NAME = "feature/add-sha";
@@ -370,7 +401,9 @@ describe("GitHub Action integration", () => {
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     octokitMock.rest.git.getRef
-      .mockRejectedValueOnce(createNotFoundError())
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+      .mockRejectedValueOnce(createNotFoundError()) // branch check
       .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
     octokitMock.rest.repos.getContent.mockResolvedValueOnce({
       data: { type: "file", sha: "baseline-sha" }
@@ -414,7 +447,9 @@ describe("GitHub Action integration", () => {
     );
     fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
     octokitMock.rest.git.getRef
-      .mockRejectedValueOnce(createNotFoundError())
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+      .mockRejectedValueOnce(createNotFoundError()) // branch check
       .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
 
     await runAction();
@@ -434,7 +469,9 @@ describe("GitHub Action integration", () => {
     };
     fsMock.readFile.mockRejectedValueOnce(createEnoentError());
     octokitMock.rest.git.getRef
-      .mockRejectedValueOnce(createNotFoundError())
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+      .mockRejectedValueOnce(createNotFoundError()) // branch check
       .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
 
     await runAction();
@@ -610,7 +647,10 @@ describe("GitHub Action integration", () => {
     octokitMock.rest.pulls.list
       .mockResolvedValueOnce({ data: [{ number: 88, html_url: "https://example.com/pr/88" }] })
       .mockResolvedValueOnce({ data: [{ number: 90, html_url: "https://example.com/pr/90" }] });
-    octokitMock.rest.git.getRef.mockResolvedValue({ data: { object: { sha: "abc123" } } });
+    octokitMock.rest.git.getRef
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+      .mockResolvedValue({ data: { object: { sha: "abc123" } } });
     octokitMock.rest.repos.getContent.mockResolvedValueOnce({
       data: { type: "file", sha: "baseline-sha" }
     });
@@ -645,7 +685,9 @@ describe("GitHub Action integration", () => {
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
       octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+        .mockRejectedValueOnce(createNotFoundError()) // branch check
         .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
 
       await runAction();
@@ -671,7 +713,9 @@ describe("GitHub Action integration", () => {
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
       octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+        .mockRejectedValueOnce(createNotFoundError()) // branch check
         .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
 
       await runAction();
@@ -698,7 +742,9 @@ describe("GitHub Action integration", () => {
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
       octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+        .mockRejectedValueOnce(createNotFoundError()) // branch check
         .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
 
       await runAction();
@@ -722,7 +768,9 @@ describe("GitHub Action integration", () => {
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
       octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+        .mockRejectedValueOnce(createNotFoundError()) // branch check
         .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
 
       await runAction();
@@ -750,7 +798,9 @@ describe("GitHub Action integration", () => {
       };
       fsMock.readFile.mockRejectedValueOnce(createEnoentError());
       octokitMock.rest.git.getRef
-        .mockRejectedValueOnce(createNotFoundError())
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+        .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+        .mockRejectedValueOnce(createNotFoundError()) // branch check
         .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
 
       await runAction();
@@ -789,7 +839,7 @@ describe("GitHub Action integration", () => {
       octokitMock.rest.repos.getContent.mockRejectedValueOnce(createNotFoundError());
       
       // File update fails with 404 multiple times, then succeeds
-      const branchNotFoundError = new Error("Branch overweight/baseline/pr-929 not found");
+      const branchNotFoundError = new Error("Branch overweight-baseline-pr-929 not found");
       branchNotFoundError.status = 404;
       
       octokitMock.rest.repos.createOrUpdateFileContents
@@ -817,7 +867,9 @@ describe("GitHub Action integration", () => {
 
       expect(octokitMock.rest.repos.createOrUpdateFileContents).toHaveBeenCalledTimes(3);
       expect(warning).toHaveBeenCalledWith(
-        expect.stringContaining("Branch overweight/baseline/pr-929 not found when updating file")
+        expect.stringContaining(
+          "Branch overweight-baseline-pr-929 not found when updating file (attempt 1/5)"
+        )
       );
       expect(info).toHaveBeenCalledWith(
         expect.stringContaining("Successfully updated file")

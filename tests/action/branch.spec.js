@@ -5,9 +5,10 @@ import {
   parseProtectedBranchPatterns,
   isBranchProtected,
   getBranchName,
-  buildUpdateBranchName
+  buildUpdateBranchName,
+  ensureCreatableBranchName
 } from "../../src/action/branch.js";
-import { createOctokitMock, resetOctokitMocks } from "./test-utils.js";
+import { createOctokitMock, resetOctokitMocks, createNotFoundError } from "./test-utils.js";
 
 vi.mock("@actions/core", () => ({
   default: {
@@ -123,6 +124,32 @@ describe("branch utilities", () => {
         currentBranch: "feature-test"
       });
       expect(result).toBe("overweight/baseline/feature-test");
+    });
+  });
+
+  describe("ensureCreatableBranchName", () => {
+    it("returns original branch name when no prefix conflict", async () => {
+      octokitMock.rest.git.getRef.mockRejectedValue(createNotFoundError());
+
+      const branchName = "overweight/baseline/pr-1";
+      const result = await ensureCreatableBranchName({ octokit: octokitMock, branchName });
+
+      expect(result).toBe(branchName);
+      expect(octokitMock.rest.git.getRef).toHaveBeenCalledWith(
+        expect.objectContaining({ ref: "heads/overweight" })
+      );
+    });
+
+    it("flattens branch name when a prefix already exists", async () => {
+      octokitMock.rest.git.getRef
+        .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
+
+      const result = await ensureCreatableBranchName({
+        octokit: octokitMock,
+        branchName: "overweight/baseline/pr-1"
+      });
+
+      expect(result).toBe("overweight-baseline-pr-1");
     });
   });
 });

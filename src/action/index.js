@@ -20,7 +20,8 @@ import {
   parseProtectedBranchPatterns,
   isBranchProtected,
   getBranchName,
-  buildUpdateBranchName
+  buildUpdateBranchName,
+  ensureCreatableBranchName
 } from "./branch.js";
 import { ensureUpdateBranchExists } from "./git.js";
 import {
@@ -240,11 +241,17 @@ const handleBaselineUpdate = async ({
     }
   }
 
-  const updateBranchName = buildUpdateBranchName({
+  let updateBranchName = buildUpdateBranchName({
     prefix: branchPrefix,
     prNumber: prIdentifier,
     currentBranch
   });
+  if (octokit) {
+    updateBranchName = await ensureCreatableBranchName({
+      octokit,
+      branchName: updateBranchName
+    });
+  }
   const repoRelativePath = ensureRelativePath(baselinePath);
 
   core.info(`Preparing to update baseline on branch: ${updateBranchName} (base: ${baseBranch})`);

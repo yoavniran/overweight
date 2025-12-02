@@ -2,6 +2,7 @@ import core from "@actions/core";
 import github from "@actions/github";
 
 const DEFAULT_PROTECTED_BRANCHES = ["main", "master"];
+const SHORT_REF_PREFIX = "heads/";
 
 /**
  * Resolve the base branch for baseline updates
@@ -134,5 +135,58 @@ export const buildUpdateBranchName = ({ prefix, prNumber, currentBranch }) => {
       : sanitizeBranchSuffix(currentBranch) || `run-${github.context.runId || Date.now()}`;
 
   return `${sanitizeBranchPrefix(prefix)}/${suffix}`;
+};
+
+const flattenBranchName = (branchName) =>
+  branchName
+    .split("/")
+    .filter(Boolean)
+    .join("-")
+    .replace(/-+/g, "-");
+
+/**
+ * Ensure the generated branch name does not conflict with existing refs
+ * @param {Object} params
+ * @param {Object} params.octokit - Authenticated Octokit instance
+ * @param {string} params.branchName - Candidate branch name
+ * @returns {Promise<string>} Resolved branch name
+ */
+export const ensureCreatableBranchName = async ({ octokit, branchName }) => {
+  if (!octokit || !branchName || !branchName.includes("/")) {
+    return branchName;
+  }
+
+  const segments = branchName.split("/").filter(Boolean);
+  if (segments.length <= 1) {
+    return branchName;
+  }
+
+  const { owner, repo } = github.context.repo;
+  let prefixSegments = [];
+
+  for (let i = 0; i < segments.length - 1; i++) {
+    prefixSegments.push(segments[i]);
+    const prefix = prefixSegments.join("/");
+
+    try {
+      await octokit.rest.git.getRef({
+        owner,
+        repo,
+        ref: `${SHORT_REF_PREFIX}${prefix}`
+      });
+      const fallbackName = flattenBranchName(branchName);
+      core.info(
+        `Branch prefix "${prefix}" already exists. Using fallback branch name "${fallbackName}".`
+      );
+      return fallbackName;
+    } catch (error) {
+      if (error.status === 404) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return branchName;
 };
 
