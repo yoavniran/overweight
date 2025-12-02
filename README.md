@@ -3,6 +3,25 @@
 
 # Overweight
 
+<p align="center">
+<a href="https://opencollective.com/react-uploady">
+        <img src="https://img.shields.io/github/sponsors/yoavniran?logo=GitHub&label=Sponsor&logoColor=#white" alt="Sponsor on Github"/>
+    </a>
+    <a href="https://badge.fury.io/js/overweight">
+        <img src="https://badge.fury.io/js/overweight.svg" alt="npm version" height="20">
+    </a>
+    <a href="https://github.com/yoavniran/overweight/actions/workflows/pr.yml">
+        <img src="https://github.com/yoavniran/overweight/actions/workflows/pr.yml/badge.svg" alt="Build Status"/>
+    </a>
+    <a href="LICENSE.md">
+       <img src="https://img.shields.io/github/license/yoavniran/overweight?color=blue&style=plastic" alt="MIT License"/>
+    </a>
+    <a href="https://www.npmjs.com/package/overweight">
+        <img src="https://img.shields.io/npm/dw/overweight.svg?style=plastic&color=blue&label=weekly%20downloads"/> 
+    </a>
+</p>
+
+
 An all-in-one toolkit for keeping your bundle sizes in check. It ships with a CLI, Node API, and GitHub Action, plus a tester architecture that lets you decide how assets are evaluated.
 
 ## Highlights
