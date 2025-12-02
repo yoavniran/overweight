@@ -1,3 +1,6 @@
+![Overweight Logo](https://github.com/yoavniran/overweight/blob/main/static/resources/overweight-logo-dark.png#gh-dark-mode-only)
+![Overweight Logo](https://github.com/yoavniran/overweight/blob/main/static/resources/overweight-logo-light.png#gh-light-mode-only)
+
 # Overweight
 
 An all-in-one toolkit for keeping your bundle sizes in check. It ships with a CLI, Node API, and GitHub Action, plus a tester architecture that lets you decide how assets are evaluated.
