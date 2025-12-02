@@ -4,7 +4,7 @@
 # Overweight
 
 <p align="center">
-<a href="https://opencollective.com/react-uploady">
+<a href="https://github.com/sponsors/yoavniran">
         <img src="https://img.shields.io/github/sponsors/yoavniran?logo=GitHub&label=Sponsor&logoColor=#white" alt="Sponsor on Github"/>
     </a>
     <a href="https://badge.fury.io/js/overweight">
