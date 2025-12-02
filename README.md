@@ -1,5 +1,5 @@
-![Overweight Logo](https://github.com/yoavniran/overweight/blob/main/static/resources/overweight-logo-dark.png#gh-dark-mode-only)
-![Overweight Logo](https://github.com/yoavniran/overweight/blob/main/static/resources/overweight-logo-light.png#gh-light-mode-only)
+![Overweight Logo](https://github.com/yoavniran/overweight/blob/main/resources/overweight-logo-dark.png#gh-dark-mode-only)
+![Overweight Logo](https://github.com/yoavniran/overweight/blob/main/resources/overweight-logo-light.png#gh-light-mode-only)
 
 # Overweight
 
