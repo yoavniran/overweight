@@ -1,3 +1,11 @@
+## [1.3.10](https://github.com/yoavniran/overweight/compare/v1.3.9...v1.3.10) (2025-12-02)
+
+
+### Bug Fixes
+
+* ensure update branch name is unique ([3d256b6](https://github.com/yoavniran/overweight/commit/3d256b6ed7321acb08bf00e62b65d758a81fc467))
+* remove gh action files from npm publish ([d883456](https://github.com/yoavniran/overweight/commit/d883456d50a825ed8bf633bfee3eabda6dd66890))
+
 ## [1.3.9](https://github.com/yoavniran/overweight/compare/v1.3.8...v1.3.9) (2025-12-01)
 
 
