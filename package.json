@@ -22,7 +22,7 @@
   },
   "files": [
     "dist",
-    "action.yml",
+    "!dist/action",
     "LICENSE",
     "README.md"
   ],
