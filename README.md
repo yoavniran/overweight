@@ -147,7 +147,7 @@ jobs:
 ```
 
 - `report-json`, `report-table`, and `report-file` outputs enable downstream workflows (PR comments, Slack alerts, artifact uploads, etc.).
-- When `baseline-report-path` + `update-baseline` are set, the action refreshes the stored bundle size report on the branch that ran the workflow. If `baseline-report-path` is omitted and `report-file` is set, the baseline defaults to that path. The update runs on a dedicated branch + pull request using `update-pr-title`, `update-pr-body`, and `update-branch-prefix`. Use `baseline-protected-branches` (default `main,master`, supports glob patterns) to block updates on protected branches.
+- When `baseline-report-path` + `update-baseline` are set, the action regenerates the stored bundle size report on a dedicated update branch (not the branch that triggered the workflow). If `baseline-report-path` is omitted and `report-file` is set, the baseline defaults to that path. The update runs on a dedicated branch + pull request using `update-pr-title`, `update-pr-body`, and `update-branch-prefix`. Use `baseline-protected-branches` (default `main,master`, supports glob patterns) to block updates on protected branches.
 - `comment-on-pr-always` (first run only) and `comment-on-pr-each-run` control when PR comments are posted even if checks pass.
 - Additional outputs (`report-file`, `baseline-updated`, `baseline-update-pr-url`, `baseline-update-pr-number`) make it easy to chain artifact uploads or follow-up workflows.
 
