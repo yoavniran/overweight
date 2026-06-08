@@ -7,6 +7,7 @@ import pc from "picocolors";
 import { loadConfig, normalizeConfig } from "./config/load-config.js";
 import { runChecks } from "./core/run-checks.js";
 import { getReporter } from "./reporters/index.js";
+import { syncBaseline } from "./cli/baseline-sync.js";
 
 const cli = cac("overweight");
 
@@ -20,6 +21,12 @@ cli
   .option("-f, --file <pattern>", "Quick check for a single file/glob.")
   .option("-s, --max-size <size>", "Max size value for --file usage.")
   .option("-c, --compression <tester>", "Tester to use with --file (default gzip).")
+  .option("--baseline <path>", "Path to a baseline report JSON to compare sizes against.")
+  .option(
+    "--baseline-threshold <value>",
+    "Tolerance below which a size change is ignored. Fraction in (0,1) = percent, integer/size = absolute bytes. Default 0.01 (1%); use 0 to record every byte."
+  )
+  .option("--update-baseline", "Write the reconciled baseline back to --baseline when it changes beyond tolerance.")
   .help();
 
 const buildSingleRule = (options) => {
@@ -54,6 +61,25 @@ const parseInlineFiles = (value) => {
   }
 };
 
+const QUIET_REPORTERS = new Set(["json", "json-file", "silent"]);
+
+const renderBaselineStatus = ({ status, path: display }) => {
+  switch (status) {
+    case "up-to-date":
+      return pc.dim(`Baseline up to date (within tolerance): ${display}`);
+    case "updated":
+      return pc.green(`Baseline updated: ${display}`);
+    case "created":
+      return pc.green(`Baseline created: ${display}`);
+    case "drift":
+      return pc.yellow(
+        `Baseline differs beyond tolerance: ${display}. Re-run with --update-baseline to refresh it.`
+      );
+    default:
+      return null;
+  }
+};
+
 const resolveConfig = async (options, root) => {
   const inlineConfig = options.files ? parseInlineFiles(options.files) : buildSingleRule(options);
 
@@ -77,6 +103,20 @@ const main = async () => {
     const result = await runChecks(config);
 
     reporter(result);
+
+    const baselineOutcome = await syncBaseline({
+      result,
+      baseline: options.baseline,
+      threshold: options.baselineThreshold,
+      update: options.updateBaseline,
+      root
+    });
+
+    const baselineMessage = renderBaselineStatus(baselineOutcome);
+
+    if (baselineMessage && !QUIET_REPORTERS.has(reporterName)) {
+      console.log(baselineMessage);
+    }
 
     process.exit(result.stats.hasFailures ? 1 : 0);
   } catch (error) {

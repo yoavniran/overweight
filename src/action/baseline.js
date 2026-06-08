@@ -1,94 +1,29 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { formatDiff } from "../utils/size.js";
+import {
+  DEFAULT_BASELINE_THRESHOLD,
+  parseBaselineThreshold,
+  reconcileBaseline,
+  serializeBaselineSnapshot,
+  buildBaselineSnapshot,
+  toBaselineEntries,
+  isWithinThreshold,
+  readBaselineState,
+  writeBaseline
+} from "../core/baseline.js";
 
-/**
- * Read baseline state from file
- * @param {string} baselinePath - Path to baseline file
- * @returns {Promise<{raw: string|null, data: object|null}>} Baseline state
- */
-export const readBaselineState = async (baselinePath) => {
-  try {
-    const raw = await fs.readFile(baselinePath, "utf-8");
-    let data = null;
-
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      data = null;
-    }
-
-    return { raw, data };
-  } catch {
-    return { raw: null, data: null };
-  }
-};
-
-/**
- * Build baseline snapshot from rows
- * @param {Array} rows - Summary rows
- * @returns {Array} Baseline snapshot data
- */
-const buildBaselineSnapshot = (rows) =>
-  [...rows]
-    .map((row) => ({
-      label: row.label,
-      file: row.file,
-      tester: row.tester,
-      size: row.size,
-      sizeBytes: row.sizeBytes,
-      limit: row.limit,
-      limitBytes: row.limitBytes
-    }))
-    .sort((a, b) => a.file.localeCompare(b.file));
-
-/**
- * Serialize baseline snapshot to JSON
- * @param {Array} rows - Summary rows
- * @returns {string} JSON string
- */
-export const serializeBaselineSnapshot = (rows) => JSON.stringify(buildBaselineSnapshot(rows), null, 2);
-
-/**
- * Write baseline file to disk
- * @param {string} baselinePath - Path to write baseline file
- * @param {Array} rows - Summary rows
- * @param {string|undefined} precomputedContent - Precomputed content (optional)
- * @returns {Promise<void>}
- */
-export const writeBaseline = async (baselinePath, rows, precomputedContent) => {
-  await fs.mkdir(path.dirname(baselinePath), { recursive: true });
-  const content = precomputedContent ?? serializeBaselineSnapshot(rows);
-  await fs.writeFile(baselinePath, content);
-};
-
-/**
- * Get baseline update info (whether update is needed and new content)
- * @param {string} baselinePath - Path to baseline file
- * @param {Array} rows - Summary rows
- * @param {string|undefined} previousContent - Previous content (optional)
- * @returns {Promise<{needsUpdate: boolean, content: string}>} Update info
- */
-export const getBaselineUpdateInfo = async (baselinePath, rows, previousContent = undefined) => {
-  const nextContent = serializeBaselineSnapshot(rows);
-
-  if (previousContent !== undefined) {
-    return {
-      needsUpdate: previousContent === null ? true : previousContent !== nextContent,
-      content: nextContent
-    };
-  }
-
-  try {
-    const currentContent = await fs.readFile(baselinePath, "utf-8");
-    return { needsUpdate: currentContent !== nextContent, content: nextContent };
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return { needsUpdate: true, content: nextContent };
-    }
-
-    throw error;
-  }
+// Re-export the pure baseline primitives so the action layer has a single import site.
+// The canonical home (and Node API surface) is src/core/baseline.js.
+export {
+  DEFAULT_BASELINE_THRESHOLD,
+  parseBaselineThreshold,
+  reconcileBaseline,
+  serializeBaselineSnapshot,
+  buildBaselineSnapshot,
+  toBaselineEntries,
+  isWithinThreshold,
+  readBaselineState,
+  writeBaseline
 };
 
 /**

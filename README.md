@@ -92,6 +92,32 @@ Available reporters: `console` (default), `json`, `json-file`, `silent`.
 pnpm overweight --reporter json-file --report-file ./reports/overweight.json
 ```
 
+### Baseline tracking
+
+Track sizes against a committed baseline and ignore insignificant build-to-build noise with a
+tolerance threshold (see [Baseline tracking with a tolerance threshold](#baseline-tracking-with-a-tolerance-threshold)):
+
+```sh
+# compare against a baseline; reports drift but never fails the run
+pnpm overweight --baseline ./overweight-report.json
+
+# refresh the baseline locally when a file moves beyond tolerance
+pnpm overweight --baseline ./overweight-report.json --update-baseline
+
+# override the default 1% tolerance (fraction = percent, integer/size = absolute bytes)
+pnpm overweight --baseline ./overweight-report.json --baseline-threshold "50 B"
+pnpm overweight --baseline ./overweight-report.json --baseline-threshold 0   # record every byte
+```
+
+| Option | Description |
+| --- | --- |
+| `--baseline <path>` | Compare current sizes against this baseline JSON. Reports drift; never changes the exit code. |
+| `--baseline-threshold <value>` | Tolerance below which a change is ignored. Fraction in `(0,1)` = percent, integer/size string = absolute bytes. Defaults to `0.01` (1%); use `0` to record every byte. |
+| `--update-baseline` | Write the reconciled baseline back to `--baseline` when a file drifts beyond tolerance. |
+
+Only each rule's `maxSize` affects the exit code — the baseline is a tracking artifact. Messages
+are suppressed for the `json`, `json-file`, and `silent` reporters so machine output stays clean.
+
 ## Node API
 
 ```js
@@ -117,6 +143,65 @@ if (result.stats.hasFailures) {
   throw new Error("Bundle too big!");
 }
 ```
+
+### Exports
+
+| Export                       | Signature                                                          | Purpose                                           |
+|------------------------------|--------------------------------------------------------------------|---------------------------------------------------|
+| `runChecks`                  | `(config, options?) => Promise<{ results, stats }>`                | Measure files against their `maxSize` rules.      |
+| `loadConfig`                 | `({ cwd?, configPath?, inlineConfig? }) => Promise<Config>`        | Resolve + normalize config from disk or inline.   |
+| `normalizeConfig`            | `(rawConfig, { cwd?, source? }) => Config`                         | Normalize an in-memory config.                    |
+| `listTesters`                | `() => Array<{ id, label }>`                                       | List the built-in testers.                        |
+| `parseBaselineThreshold`     | `(value) => { thresholdBytes, thresholdPercent }`                  | Parse a tolerance value; defaults to 1% when unset. |
+| `isWithinThreshold`          | `(nextBytes, previousBytes, threshold) => boolean`                 | Whether a size move is within tolerance.          |
+| `toBaselineEntries`          | `(runChecksResult) => BaselineEntry[]`                             | Convert a `runChecks` result to baseline entries. |
+| `reconcileBaseline`          | `(nextEntries, previousData, threshold?) => { needsUpdate, rows }` | Diff against a stored baseline with tolerance.    |
+| `serializeBaselineSnapshot`  | `(entries) => string`                                              | Canonical baseline JSON (sorted by file).         |
+| `buildBaselineSnapshot`      | `(entries) => BaselineEntry[]`                                     | Same projection without serializing.              |
+| `DEFAULT_BASELINE_THRESHOLD` | `0.01`                                                             | The default tolerance (1%).                       |
+
+A `BaselineEntry` is `{ label, file, tester, size, sizeBytes, limit, limitBytes }`.
+
+### Baseline tracking with a tolerance threshold
+
+Bundlers and minifiers rarely emit byte-identical output across builds (embedded build dates,
+filesystem-dependent module ordering, non-seeded identifier mangling). Without a tolerance,
+every few-byte wobble looks like a real change. The baseline API lets you track sizes over time
+and ignore insignificant noise.
+
+The `threshold` value's shape decides how it is interpreted:
+
+- a bare fraction in `(0, 1)` (e.g. `0.01`) is a **percentage** of the previous size;
+- an integer or size string (e.g. `50`, `"50 B"`, `"1 kB"`) is an **absolute** byte tolerance;
+- omitting it (or passing `undefined`/`null`/`""`) applies the default `0.01` (1%);
+- an explicit `0` disables the tolerance and records every byte.
+
+A file is treated as changed only when `|newSize − previousSize|` exceeds
+`max(thresholdBytes, thresholdPercent × previousSize)`. Files within tolerance **retain their
+previously recorded size**, so the baseline never drifts or oscillates. A change to a file's
+`limit`, `tester`, or `label` — or a file being added/removed — always counts as a change.
+
+```js
+import { readFile, writeFile } from "node:fs/promises";
+import { runChecks, toBaselineEntries, reconcileBaseline, serializeBaselineSnapshot } from "overweight";
+
+const result = await runChecks(config);
+const entries = toBaselineEntries(result);
+
+const previous = await readFile("overweight-report.json", "utf8")
+  .then(JSON.parse)
+  .catch(() => null); // no baseline yet
+
+// Ignore moves under 1%; pass "50 B" for an absolute tolerance instead.
+const { needsUpdate, rows } = reconcileBaseline(entries, previous, 0.01);
+
+if (needsUpdate) {
+  await writeFile("overweight-report.json", serializeBaselineSnapshot(rows));
+}
+```
+
+> The baseline gates nothing on its own — each rule's `maxSize` is the hard regression guard
+> (`result.stats.hasFailures`). A generous tolerance never weakens that protection.
 
 ## GitHub Action
 
@@ -171,6 +256,36 @@ To allow that flow:
 - Use `baseline-protected-branches` to list branches or patterns (comma-separated) where baseline updates are forbidden; the default `main,master` protects the typical default branches.
 - Manual workflows triggered on a feature branch automatically detect the open PR for that branch and reuse its baseline update PR instead of opening a new one.
 - Baseline updates occur only when all size checks pass. Failing runs skip the baseline refresh entirely to avoid locking in broken results.
+
+### Tolerance thresholds (avoiding noisy baseline PRs)
+
+Minifiers and bundlers rarely produce byte-identical output across builds — embedded
+build dates, filesystem-dependent module ordering, and non-seeded identifier mangling all
+shift the compressed size by a few bytes even when no source changed. Without a tolerance,
+every such wobble opens a baseline PR.
+
+Use the `baseline-threshold` input to require a change to exceed a tolerance before the
+baseline is rewritten. Its value's shape decides how it's interpreted:
+
+```yaml
+      - uses: yoavniran/overweight@v1
+        with:
+          # ...
+          update-baseline: true
+          baseline-threshold: 0.01   # a fraction in (0,1) -> percentage of previous size (1%)
+          # baseline-threshold: "50 B"  # an integer or size string -> absolute bytes
+```
+
+- A bare fraction between `0` and `1` (e.g. `0.01`) is a **percentage** of the previous size.
+- An integer or size string (e.g. `50`, `"50 B"`, `"1 kB"`) is an **absolute** byte tolerance.
+- A file is only treated as changed when `|newSize − previousSize|` exceeds that tolerance.
+- Files within tolerance **retain their previously recorded size**, so the baseline never
+  drifts or oscillates run-to-run.
+- A change in a file's `limit`, tester, or label — or a file being added/removed — always
+  updates the baseline regardless of tolerance.
+- Defaults to `0.01` (1%). Set to `0` to record every byte.
+- Your real regression guard is each rule's `maxSize`; the baseline file gates nothing, so a
+  generous tolerance does not weaken protection.
 
 
 ## Release & contributing

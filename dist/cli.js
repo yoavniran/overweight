@@ -2,7 +2,7 @@
 import path from 'path';
 import cac from 'cac';
 import pc from 'picocolors';
-import fs from 'fs/promises';
+import fs4 from 'fs/promises';
 import { z } from 'zod';
 import { promisify } from 'util';
 import { brotliCompress, gzip, constants } from 'zlib';
@@ -154,14 +154,14 @@ var ConfigSchema = z.object({
 var ensureArrayConfig = (input) => Array.isArray(input) ? { files: input } : input;
 var fileExists = async (targetPath) => {
   try {
-    await fs.access(targetPath);
+    await fs4.access(targetPath);
     return true;
   } catch {
     return false;
   }
 };
 var readJson = async (targetPath) => {
-  const raw = await fs.readFile(targetPath, "utf-8");
+  const raw = await fs4.readFile(targetPath, "utf-8");
   try {
     return JSON.parse(raw);
   } catch (error) {
@@ -288,7 +288,7 @@ var runChecks = async (rawConfig, options = {}) => {
       continue;
     }
     for (const match of matches) {
-      const buffer = await fs.readFile(match.absolutePath);
+      const buffer = await fs4.readFile(match.absolutePath);
       const measurement = await tester.measure(buffer, {
         filePath: match.absolutePath,
         pattern: fileRule.pattern
@@ -418,10 +418,123 @@ var getReporter = (name = "console", options = {}) => {
   }
   return (result) => reporter(result, options);
 };
+var DEFAULT_BASELINE_THRESHOLD = 0.01;
+var parseBaselineThreshold = (value) => {
+  const provided = !(value === void 0 || value === null || `${value}`.trim() === "");
+  const raw = provided ? `${value}`.trim() : `${DEFAULT_BASELINE_THRESHOLD}`;
+  const isBareNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
+  const numeric = Number(raw);
+  if (isBareNumber && numeric < 0) {
+    throw new Error(`baseline-threshold must be greater than or equal to zero, received "${value}"`);
+  }
+  if (isBareNumber && numeric > 0 && numeric < 1) {
+    return { thresholdBytes: 0, thresholdPercent: numeric };
+  }
+  return { thresholdBytes: parseSize(raw), thresholdPercent: 0 };
+};
+var normalizeThreshold = (threshold) => threshold && typeof threshold === "object" && "thresholdBytes" in threshold ? threshold : parseBaselineThreshold(threshold);
+var isWithinThreshold = (nextBytes, previousBytes, threshold) => {
+  const { thresholdBytes, thresholdPercent } = normalizeThreshold(threshold);
+  const delta = Math.abs(nextBytes - previousBytes);
+  const tolerance = Math.max(thresholdBytes, thresholdPercent * previousBytes);
+  return delta <= tolerance;
+};
+var toBaselineEntries = (result) => (result?.results ?? []).filter((entry) => typeof entry.size === "number").map((entry) => ({
+  label: entry.label,
+  file: entry.filePath,
+  tester: entry.testerLabel,
+  size: entry.sizeFormatted,
+  sizeBytes: entry.size,
+  limit: entry.maxSizeFormatted,
+  limitBytes: entry.maxSize
+}));
+var buildBaselineSnapshot = (entries) => [...entries].map((entry) => ({
+  label: entry.label,
+  file: entry.file,
+  tester: entry.tester,
+  size: entry.size,
+  sizeBytes: entry.sizeBytes,
+  limit: entry.limit,
+  limitBytes: entry.limitBytes
+})).sort((a, b) => a.file.localeCompare(b.file));
+var serializeBaselineSnapshot = (entries) => JSON.stringify(buildBaselineSnapshot(entries), null, 2);
+var readBaselineState = async (baselinePath) => {
+  try {
+    const raw = await fs4.readFile(baselinePath, "utf-8");
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+    return { raw, data };
+  } catch {
+    return { raw: null, data: null };
+  }
+};
+var writeBaseline = async (baselinePath, entries, precomputedContent) => {
+  await fs4.mkdir(path.dirname(baselinePath), { recursive: true });
+  const content = serializeBaselineSnapshot(entries);
+  await fs4.writeFile(baselinePath, content);
+};
+var reconcileBaseline = (nextEntries, previousData, threshold) => {
+  if (!Array.isArray(previousData)) {
+    return { needsUpdate: true, rows: nextEntries };
+  }
+  const normalized = normalizeThreshold(threshold);
+  const previousByFile = new Map(previousData.map((row) => [row.file, row]));
+  let needsUpdate = false;
+  const rows = nextEntries.map((row) => {
+    const previous = previousByFile.get(row.file);
+    if (!previous) {
+      needsUpdate = true;
+      return row;
+    }
+    previousByFile.delete(row.file);
+    const metadataChanged = row.limitBytes !== previous.limitBytes || row.tester !== previous.tester || row.label !== previous.label;
+    const sizeChanged = !isWithinThreshold(row.sizeBytes, previous.sizeBytes ?? 0, normalized);
+    if (metadataChanged || sizeChanged) {
+      needsUpdate = true;
+      return row;
+    }
+    return previous;
+  });
+  if (previousByFile.size > 0) {
+    needsUpdate = true;
+  }
+  return { needsUpdate, rows };
+};
+
+// src/cli/baseline-sync.js
+var syncBaseline = async ({ result, baseline, threshold, update, root = process.cwd() }) => {
+  if (update && !baseline) {
+    throw new Error("--update-baseline requires --baseline to be set.");
+  }
+  if (!baseline) {
+    return { status: "skipped" };
+  }
+  const baselinePath = path.resolve(root, baseline);
+  const { data: previous } = await readBaselineState(baselinePath);
+  const entries = toBaselineEntries(result);
+  const { needsUpdate, rows } = reconcileBaseline(entries, previous, threshold);
+  const display = path.relative(root, baselinePath) || baselinePath;
+  const exists = Array.isArray(previous);
+  if (!needsUpdate) {
+    return { status: "up-to-date", path: display };
+  }
+  if (update) {
+    await writeBaseline(baselinePath, rows);
+    return { status: exists ? "updated" : "created", path: display };
+  }
+  return { status: "drift", path: display };
+};
 
 // src/cli.js
 var cli = cac("overweight");
-cli.option("--config <path>", "Path to an overweight configuration file.").option("--root <path>", "Working directory for resolving files and globs.").option("--reporter <name>", "Reporter to use (console, json, json-file, silent).").option("--json", "Shortcut for --reporter=json.").option("--report-file <path>", "Target path for the json-file reporter output.").option("--files <json>", "Inline JSON array of file rules (overrides config file).").option("-f, --file <pattern>", "Quick check for a single file/glob.").option("-s, --max-size <size>", "Max size value for --file usage.").option("-c, --compression <tester>", "Tester to use with --file (default gzip).").help();
+cli.option("--config <path>", "Path to an overweight configuration file.").option("--root <path>", "Working directory for resolving files and globs.").option("--reporter <name>", "Reporter to use (console, json, json-file, silent).").option("--json", "Shortcut for --reporter=json.").option("--report-file <path>", "Target path for the json-file reporter output.").option("--files <json>", "Inline JSON array of file rules (overrides config file).").option("-f, --file <pattern>", "Quick check for a single file/glob.").option("-s, --max-size <size>", "Max size value for --file usage.").option("-c, --compression <tester>", "Tester to use with --file (default gzip).").option("--baseline <path>", "Path to a baseline report JSON to compare sizes against.").option(
+  "--baseline-threshold <value>",
+  "Tolerance below which a size change is ignored. Fraction in (0,1) = percent, integer/size = absolute bytes. Default 0.01 (1%); use 0 to record every byte."
+).option("--update-baseline", "Write the reconciled baseline back to --baseline when it changes beyond tolerance.").help();
 var buildSingleRule = (options) => {
   const pattern = options.file || options.f;
   if (!pattern) {
@@ -448,6 +561,23 @@ var parseInlineFiles = (value) => {
     throw new Error(`Failed to parse --files JSON: ${error.message}`);
   }
 };
+var QUIET_REPORTERS = /* @__PURE__ */ new Set(["json", "json-file", "silent"]);
+var renderBaselineStatus = ({ status, path: display }) => {
+  switch (status) {
+    case "up-to-date":
+      return pc.dim(`Baseline up to date (within tolerance): ${display}`);
+    case "updated":
+      return pc.green(`Baseline updated: ${display}`);
+    case "created":
+      return pc.green(`Baseline created: ${display}`);
+    case "drift":
+      return pc.yellow(
+        `Baseline differs beyond tolerance: ${display}. Re-run with --update-baseline to refresh it.`
+      );
+    default:
+      return null;
+  }
+};
 var resolveConfig = async (options, root) => {
   const inlineConfig = options.files ? parseInlineFiles(options.files) : buildSingleRule(options);
   if (inlineConfig) {
@@ -467,6 +597,17 @@ var main = async () => {
     });
     const result = await runChecks(config);
     reporter(result);
+    const baselineOutcome = await syncBaseline({
+      result,
+      baseline: options.baseline,
+      threshold: options.baselineThreshold,
+      update: options.updateBaseline,
+      root
+    });
+    const baselineMessage = renderBaselineStatus(baselineOutcome);
+    if (baselineMessage && !QUIET_REPORTERS.has(reporterName)) {
+      console.log(baselineMessage);
+    }
     process.exit(result.stats.hasFailures ? 1 : 0);
   } catch (error) {
     console.error(pc.red(error.message));

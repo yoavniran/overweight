@@ -7,8 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `overweight` is an ESM-only bundle size guard published to npm. A single `src/` tree
 produces three consumable surfaces, all sharing the same core engine:
 
-- **Node API** (`src/index.js` → `dist/index.js`) — `loadConfig`, `normalizeConfig`, `runChecks`, `listTesters`.
-- **CLI** (`src/cli.js` → `dist/cli.js`, bin `overweight`) — built on `cac`.
+- **Node API** (`src/index.js` → `dist/index.js`) — `loadConfig`, `normalizeConfig`, `runChecks`,
+  `listTesters`, plus the baseline primitives re-exported from `src/core/baseline.js`
+  (`parseBaselineThreshold`, `isWithinThreshold`, `toBaselineEntries`, `reconcileBaseline`,
+  `serializeBaselineSnapshot`, `buildBaselineSnapshot`, `DEFAULT_BASELINE_THRESHOLD`).
+- **CLI** (`src/cli.js` → `dist/cli.js`, bin `overweight`) — built on `cac`. Supports baseline
+  tracking via `--baseline`, `--baseline-threshold`, `--update-baseline` (orchestrated by
+  `src/cli/baseline-sync.js`'s `syncBaseline`, which returns a status the CLI renders). Drift
+  never affects the exit code; messages are suppressed for quiet reporters.
 - **GitHub Action** (`src/action/index.js` → `dist/action/index.js`) — entry referenced by `action.yml`.
 
 ## Commands
@@ -73,6 +79,21 @@ maintains a **baseline** file. Key behavior to preserve when editing:
   `src/action/github.js` + `git.js`), never to the triggering branch.
 - Baseline updates are **skipped when checks fail** and on **protected branches**
   (`baseline-protected-branches`, default `main,master`, glob-aware — `branch.js`).
+- Baseline rewrites are gated by a single **tolerance threshold** (`baseline-threshold`,
+  default `0.01`) to absorb non-deterministic build noise. The pure logic plus baseline file IO
+  (`readBaselineState`, `writeBaseline`) live in `src/core/baseline.js` (Node API surface);
+  `src/action/baseline.js` re-exports them and adds the GitHub-specific bits
+  (`mergeWithBaseline`, `ensureRelativePath`, `getWorkspaceRoot`). `parseBaselineThreshold`
+  interprets the value by shape: a bare
+  fraction in `(0,1)` → percentage, anything else (integer / size string) → absolute bytes,
+  yielding `{thresholdBytes, thresholdPercent}`. `reconcileBaseline(nextEntries, previousData,
+  threshold)` (threshold may be raw or a parsed descriptor) compares each entry against the
+  stored snapshot: files within `max(thresholdBytes, thresholdPercent × previousBytes)`
+  **retain their previous recorded value** (no drift/oscillation), while size moves beyond
+  tolerance, limit/tester/label changes, or added/removed files mark the snapshot dirty.
+  `toBaselineEntries(runChecksResult)` converts core results into the `BaselineEntry` shape.
+  The `maxSize` rule — not the baseline — is the real regression guard, so the tolerance never
+  weakens protection.
 - The update branch/PR is reused per source PR (suffix `pr-<number>`) so pushes don't open duplicates.
 - Module split: `config.js` (input parsing), `baseline.js` (read/merge/write baseline state),
   `branch.js` (branch naming + protection), `git.js` (branch creation), `github.js` (octokit

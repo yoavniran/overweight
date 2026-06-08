@@ -4,7 +4,8 @@
       "label": "dist-index",
       "path": "./dist/index.js",
       "maxSize": "5Kb",
-      "compression": "gzip"
+      "compression": "gzip",
+      "threshold": "0"
     },
     {
       "label": "dist-cli",

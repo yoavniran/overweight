@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import { parseSize } from "../utils/size.js";
 
 export const DEFAULT_BASELINE_THRESHOLD = 0.01;
@@ -118,6 +121,42 @@ export const buildBaselineSnapshot = (entries) =>
  */
 export const serializeBaselineSnapshot = (entries) =>
   JSON.stringify(buildBaselineSnapshot(entries), null, 2);
+
+/**
+ * Read baseline state from disk. Missing or unparseable files resolve to nulls
+ * rather than throwing, so callers can treat "no baseline yet" uniformly.
+ * @param {string} baselinePath - Path to the baseline file.
+ * @returns {Promise<{raw: string|null, data: Array|null}>}
+ */
+export const readBaselineState = async (baselinePath) => {
+  try {
+    const raw = await fs.readFile(baselinePath, "utf-8");
+    let data = null;
+
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+
+    return { raw, data };
+  } catch {
+    return { raw: null, data: null };
+  }
+};
+
+/**
+ * Write a baseline file to disk, creating parent directories as needed.
+ * @param {string} baselinePath - Destination path.
+ * @param {Array} entries - Entries to serialize (ignored when `precomputedContent` is given).
+ * @param {string} [precomputedContent] - Pre-serialized JSON to write verbatim.
+ * @returns {Promise<void>}
+ */
+export const writeBaseline = async (baselinePath, entries, precomputedContent) => {
+  await fs.mkdir(path.dirname(baselinePath), { recursive: true });
+  const content = precomputedContent ?? serializeBaselineSnapshot(entries);
+  await fs.writeFile(baselinePath, content);
+};
 
 /**
  * Reconcile freshly measured entries against a stored baseline using a tolerance
