@@ -73,7 +73,7 @@ outputs:
   baseline-update-pr-number:
     description: "Number of the pull request created for the baseline update."
 runs:
-  using: "node20"
+  using: "node24"
   main: "dist/action/index.js"
 branding:
   color: "orange"
