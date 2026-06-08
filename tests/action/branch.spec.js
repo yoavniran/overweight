@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import github from "@actions/github";
+import * as github from "@actions/github";
 import {
   resolveBaseBranch,
   parseProtectedBranchPatterns,
@@ -11,22 +11,18 @@ import {
 import { createOctokitMock, resetOctokitMocks, createNotFoundError } from "./test-utils.js";
 
 vi.mock("@actions/core", () => ({
-  default: {
-    info: vi.fn(),
-    warning: vi.fn()
-  }
+  info: vi.fn(),
+  warning: vi.fn()
 }));
 
 const octokitMock = createOctokitMock();
 
 vi.mock("@actions/github", () => ({
-  default: {
-    context: {
-      payload: {
-        pull_request: null
-      },
-      repo: { owner: "owner", repo: "repo" }
-    }
+  context: {
+    payload: {
+      pull_request: null
+    },
+    repo: { owner: "owner", repo: "repo" }
   }
 }));
 

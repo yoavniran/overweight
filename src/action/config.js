@@ -1,5 +1,5 @@
 import path from "node:path";
-import core from "@actions/core";
+import * as core from "@actions/core";
 import { loadConfig, normalizeConfig } from "../config/load-config.js";
 
 /**
