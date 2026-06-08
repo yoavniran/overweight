@@ -37,10 +37,7 @@ vi.mock("@actions/core", () => {
   info,
   warning
   };
-  return {
-    ...coreMock,
-    default: coreMock
-  };
+  return coreMock;
 });
 
 const githubContext = vi.hoisted(() => ({
@@ -98,16 +95,10 @@ const octokitMock = vi.hoisted(() => {
   };
 });
 
-vi.mock("@actions/github", () => {
-  const githubModule = {
-    context: githubContext,
-    getOctokit: () => octokitMock
-  };
-  return {
-    ...githubModule,
-    default: githubModule
-  };
-});
+vi.mock("@actions/github", () => ({
+  context: githubContext,
+  getOctokit: () => octokitMock
+}));
 
 let mockConfig;
 const loadConfig = vi.hoisted(() => vi.fn());

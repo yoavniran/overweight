@@ -13,17 +13,13 @@ const octokitMock = {
 };
 
 vi.mock("@actions/core", () => ({
-  default: {
-    info: vi.fn(),
-    warning: vi.fn()
-  }
+  info: vi.fn(),
+  warning: vi.fn()
 }));
 
 vi.mock("@actions/github", () => ({
-  default: {
-    context: {
-      repo: { owner: "owner", repo: "repo" }
-    }
+  context: {
+    repo: { owner: "owner", repo: "repo" }
   }
 }));
 

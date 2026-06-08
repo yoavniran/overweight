@@ -1,8 +1,8 @@
 import path from "node:path";
 import { Buffer } from "node:buffer";
 
-import core from "@actions/core";
-import github from "@actions/github";
+import * as core from "@actions/core";
+import * as github from "@actions/github";
 
 import { resolveConfig } from "./config.js";
 import { runChecks } from "../core/run-checks.js";
