@@ -1,6 +1,0 @@
----
-alwaysApply: true
-description: Rule to always use pnpm package manager
----
-
-Whenever you need to use a JavaScript package manager, use pnpm.

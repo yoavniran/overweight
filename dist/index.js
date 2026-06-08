@@ -328,7 +328,74 @@ var runChecks = async (rawConfig, options = {}) => {
     }
   };
 };
+var DEFAULT_BASELINE_THRESHOLD = 0.01;
+var parseBaselineThreshold = (value) => {
+  const provided = !(value === void 0 || value === null || `${value}`.trim() === "");
+  const raw = provided ? `${value}`.trim() : `${DEFAULT_BASELINE_THRESHOLD}`;
+  const isBareNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
+  const numeric = Number(raw);
+  if (isBareNumber && numeric < 0) {
+    throw new Error(`baseline-threshold must be greater than or equal to zero, received "${value}"`);
+  }
+  if (isBareNumber && numeric > 0 && numeric < 1) {
+    return { thresholdBytes: 0, thresholdPercent: numeric };
+  }
+  return { thresholdBytes: parseSize(raw), thresholdPercent: 0 };
+};
+var normalizeThreshold = (threshold) => threshold && typeof threshold === "object" && "thresholdBytes" in threshold ? threshold : parseBaselineThreshold(threshold);
+var isWithinThreshold = (nextBytes, previousBytes, threshold) => {
+  const { thresholdBytes, thresholdPercent } = normalizeThreshold(threshold);
+  const delta = Math.abs(nextBytes - previousBytes);
+  const tolerance = Math.max(thresholdBytes, thresholdPercent * previousBytes);
+  return delta <= tolerance;
+};
+var toBaselineEntries = (result) => (result?.results ?? []).filter((entry) => typeof entry.size === "number").map((entry) => ({
+  label: entry.label,
+  file: entry.filePath,
+  tester: entry.testerLabel,
+  size: entry.sizeFormatted,
+  sizeBytes: entry.size,
+  limit: entry.maxSizeFormatted,
+  limitBytes: entry.maxSize
+}));
+var buildBaselineSnapshot = (entries) => [...entries].map((entry) => ({
+  label: entry.label,
+  file: entry.file,
+  tester: entry.tester,
+  size: entry.size,
+  sizeBytes: entry.sizeBytes,
+  limit: entry.limit,
+  limitBytes: entry.limitBytes
+})).sort((a, b) => a.file.localeCompare(b.file));
+var serializeBaselineSnapshot = (entries) => JSON.stringify(buildBaselineSnapshot(entries), null, 2);
+var reconcileBaseline = (nextEntries, previousData, threshold) => {
+  if (!Array.isArray(previousData)) {
+    return { needsUpdate: true, rows: nextEntries };
+  }
+  const normalized = normalizeThreshold(threshold);
+  const previousByFile = new Map(previousData.map((row) => [row.file, row]));
+  let needsUpdate = false;
+  const rows = nextEntries.map((row) => {
+    const previous = previousByFile.get(row.file);
+    if (!previous) {
+      needsUpdate = true;
+      return row;
+    }
+    previousByFile.delete(row.file);
+    const metadataChanged = row.limitBytes !== previous.limitBytes || row.tester !== previous.tester || row.label !== previous.label;
+    const sizeChanged = !isWithinThreshold(row.sizeBytes, previous.sizeBytes ?? 0, normalized);
+    if (metadataChanged || sizeChanged) {
+      needsUpdate = true;
+      return row;
+    }
+    return previous;
+  });
+  if (previousByFile.size > 0) {
+    needsUpdate = true;
+  }
+  return { needsUpdate, rows };
+};
 
-export { listTesters, loadConfig, normalizeConfig, runChecks };
+export { DEFAULT_BASELINE_THRESHOLD, buildBaselineSnapshot, isWithinThreshold, listTesters, loadConfig, normalizeConfig, parseBaselineThreshold, reconcileBaseline, runChecks, serializeBaselineSnapshot, toBaselineEntries };
 //# sourceMappingURL=index.js.map
 //# sourceMappingURL=index.js.map

@@ -1,3 +1,5 @@
+.idea/
+
 node_modules
 .DS_Store
 coverage
@@ -8,3 +10,5 @@ coverage
 .env.development.local
 .env.test.local
 .env.production.local
+
+dist/

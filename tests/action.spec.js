@@ -611,6 +611,99 @@ describe("GitHub Action integration", () => {
     expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
   });
 
+  it("skips baseline update when the size change is within the configured tolerance", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/within-tolerance";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true",
+      "baseline-threshold": "0.01"
+    };
+    // current measured size is 12000; baseline 11950 -> +0.42%, within 1%
+    const previousSnapshot = JSON.stringify(
+      [
+        {
+          label: "bundle",
+          file: "dist/file.js",
+          tester: "gzip",
+          size: "12 kB",
+          sizeBytes: 11950,
+          limit: "10 kB",
+          limitBytes: 10000
+        }
+      ],
+      null,
+      2
+    );
+    fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
+
+    await runAction();
+
+    expect(fsMock.writeFile).not.toHaveBeenCalled();
+    expect(octokitMock.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("opens a baseline PR when the size change exceeds the configured tolerance", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/exceeds-tolerance";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true",
+      "baseline-threshold": "0.01"
+    };
+    // current measured size is 12000; baseline 11000 -> +9%, beyond 1%
+    const previousSnapshot = JSON.stringify(
+      [
+        {
+          label: "bundle",
+          file: "dist/file.js",
+          tester: "gzip",
+          size: "11 kB",
+          sizeBytes: 11000,
+          limit: "10 kB",
+          limitBytes: 10000
+        }
+      ],
+      null,
+      2
+    );
+    fsMock.readFile.mockResolvedValueOnce(previousSnapshot);
+    octokitMock.rest.git.getRef
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight
+      .mockRejectedValueOnce(createNotFoundError()) // prefix check: overweight/baseline
+      .mockRejectedValueOnce(createNotFoundError()) // branch check
+      .mockResolvedValueOnce({ data: { object: { sha: "abc123" } } });
+
+    await runAction();
+
+    expect(fsMock.writeFile).toHaveBeenCalledWith("/repo/baseline.json", expect.any(String));
+    expect(octokitMock.rest.pulls.create).toHaveBeenCalledTimes(1);
+    expect(setOutput).toHaveBeenCalledWith("baseline-updated", "true");
+  });
+
+  it("fails when baseline-threshold is invalid", async () => {
+    mockRunResult.stats.hasFailures = false;
+    process.env.GITHUB_REF_NAME = "feature/bad-threshold";
+    inputs = {
+      "github-token": "token",
+      "baseline-report-path": "baseline.json",
+      "update-baseline": "true",
+      "baseline-threshold": "-0.5"
+    };
+    fsMock.readFile.mockRejectedValueOnce(createEnoentError());
+
+    await runAction();
+
+    expect(setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("greater than or equal to zero")
+    );
+    expect(octokitMock.rest.pulls.create).not.toHaveBeenCalled();
+  });
+
   it("skips baseline update when baseline path defaults to report-file and nothing changed", async () => {
     mockRunResult.stats.hasFailures = false;
     process.env.GITHUB_REF_NAME = "feature/shared-report";

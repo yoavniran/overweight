@@ -11,7 +11,9 @@ import { buildSummaryRows, toTableData, renderHtmlTable } from "./report.js";
 import {
   readBaselineState,
   writeBaseline,
-  getBaselineUpdateInfo,
+  reconcileBaseline,
+  parseBaselineThreshold,
+  serializeBaselineSnapshot,
   mergeWithBaseline,
   ensureRelativePath
 } from "./baseline.js";
@@ -72,7 +74,7 @@ export const runAction = async () => {
       : null;
     const baselineState = baselinePath ? await readBaselineState(baselinePath) : null;
     const baselineData = baselineState?.data ?? null;
-    const baselineFileContent = baselineState ? baselineState.raw : undefined;
+    const baselineThresholds = parseBaselineThreshold(core.getInput("baseline-threshold"));
     const summaryRows = mergeWithBaseline(baseRows, baselineData);
 
     // Generate report file
@@ -111,7 +113,8 @@ export const runAction = async () => {
           octokit,
           baselinePath,
           summaryRows,
-          baselineFileContent,
+          baselineData,
+          thresholds: baselineThresholds,
           config
         });
       }
@@ -171,22 +174,25 @@ export const runAction = async () => {
  * @param {Object} params.octokit - GitHub Octokit instance
  * @param {string} params.baselinePath - Path to baseline file
  * @param {Array} params.summaryRows - Summary rows
- * @param {string|undefined} params.baselineFileContent - Existing baseline content
+ * @param {Array|null} params.baselineData - Parsed existing baseline snapshot
+ * @param {{thresholdBytes: number, thresholdPercent: number}} params.thresholds - Tolerance thresholds
  * @param {Object} params.config - Config object
  */
 const handleBaselineUpdate = async ({
   octokit,
   baselinePath,
   summaryRows,
-  baselineFileContent,
+  baselineData,
+  thresholds,
   config
 }) => {
   core.info(`Checking if baseline update is needed for ${baselinePath}...`);
-  const { needsUpdate, content } = await getBaselineUpdateInfo(
-    baselinePath,
+  const { needsUpdate, rows: reconciledRows } = reconcileBaseline(
     summaryRows,
-    baselineFileContent
+    baselineData,
+    thresholds
   );
+  const content = serializeBaselineSnapshot(reconciledRows);
   const currentBranch = getBranchName() || "unknown";
   const protectedPatterns = parseProtectedBranchPatterns(
     core.getInput("baseline-protected-branches")
@@ -272,7 +278,7 @@ const handleBaselineUpdate = async ({
   });
 
   // Write baseline to disk
-  await writeBaseline(baselinePath, summaryRows, content);
+  await writeBaseline(baselinePath, reconciledRows, content);
   core.info(`Wrote updated baseline snapshot to ${baselinePath} (${content.length} bytes)`);
 
   // Update file on GitHub
