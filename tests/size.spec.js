@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDiff, parseSize } from "../src/utils/size.js";
+import { formatDiff, formatDiffPercent, parseSize } from "../src/utils/size.js";
 
 describe("parseSize", () => {
   it("parses decimal units", () => {
@@ -27,6 +27,20 @@ describe("formatDiff", () => {
     expect(formatDiff(1024)).toContain("+");
     expect(formatDiff(-1024)).toContain("-");
     expect(formatDiff(0)).toBe("0 B");
+  });
+});
+
+describe("formatDiffPercent", () => {
+  it("returns the signed percentage relative to the limit", () => {
+    expect(formatDiffPercent(500, 10_000)).toBe("+5.0%");
+    expect(formatDiffPercent(-2500, 10_000)).toBe("-25.0%");
+    expect(formatDiffPercent(0, 10_000)).toBe("0.0%");
+  });
+
+  it("returns null when inputs are not usable", () => {
+    expect(formatDiffPercent(null, 10_000)).toBeNull();
+    expect(formatDiffPercent(500, 0)).toBeNull();
+    expect(formatDiffPercent(500, null)).toBeNull();
   });
 });
 

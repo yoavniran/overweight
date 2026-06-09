@@ -43702,6 +43702,14 @@ var formatDiff = (diff) => {
   const sign = diff > 0 ? "+" : "-";
   return `${sign}${formatBytes(Math.abs(diff))}`;
 };
+var formatDiffPercent = (diff, total) => {
+  if (!Number.isFinite(diff) || !Number.isFinite(total) || total <= 0) {
+    return null;
+  }
+  const percent = diff / total * 100;
+  const sign = percent > 0 ? "+" : percent < 0 ? "-" : "";
+  return `${sign}${Math.abs(percent).toFixed(1)}%`;
+};
 var parseSize = (value) => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -43972,6 +43980,10 @@ var statusEmoji = (row) => {
   }
   return row.status === "pass" ? "\u{1F7E2}" : "\u{1F53A}";
 };
+var diffCell = (row) => {
+  const change = row.baselineDiff ?? "N/A";
+  return row.diffPercent ? `${change} (${row.diffPercent})` : change;
+};
 var buildSummaryRows = (results) => results.map((entry) => ({
   label: entry.label,
   file: entry.filePath,
@@ -44001,14 +44013,14 @@ var toTableData = (rows) => [
     { data: row.file },
     { data: row.size },
     { data: row.limit },
-    { data: row.diff },
+    { data: diffCell(row) },
     { data: row.trend || "N/A" }
   ])
 ];
 var renderHtmlTable = (rows) => {
   const header = ["Status", "Label", "File", "Size", "Limit", "\u0394", "Trend"].map((title) => `<th>${title}</th>`).join("");
   const body = rows.map(
-    (row) => `<tr><td>${statusEmoji(row)}</td><td>${row.label}</td><td>${row.file}</td><td>${row.size}</td><td>${row.limit}</td><td>${row.diff}</td><td>${row.trend || "N/A"}</td></tr>`
+    (row) => `<tr><td>${statusEmoji(row)}</td><td>${row.label}</td><td>${row.file}</td><td>${row.size}</td><td>${row.limit}</td><td>${diffCell(row)}</td><td>${row.trend || "N/A"}</td></tr>`
   ).join("");
   return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
 };
@@ -44099,13 +44111,14 @@ var mergeWithBaseline = (rows, baseline) => {
   return rows.map((row) => {
     const previous = map2.get(row.file);
     if (!previous) {
-      return { ...row, baselineSize: "N/A", baselineDiff: "N/A", trend: "N/A" };
+      return { ...row, baselineSize: "N/A", baselineDiff: "N/A", diffPercent: null, trend: "N/A" };
     }
     const delta = row.sizeBytes - (previous.sizeBytes || 0);
     return {
       ...row,
       baselineSize: previous.size,
       baselineDiff: formatDiff(delta),
+      diffPercent: formatDiffPercent(delta, previous.sizeBytes),
       trend: delta === 0 ? "\u2796" : delta > 0 ? "\u{1F53A}" : "\u2B07"
     };
   });

@@ -26,6 +26,16 @@ export const formatDiff = (diff) => {
   return `${sign}${formatBytes(Math.abs(diff))}`;
 };
 
+export const formatDiffPercent = (diff, total) => {
+  if (!Number.isFinite(diff) || !Number.isFinite(total) || total <= 0) {
+    return null;
+  }
+
+  const percent = (diff / total) * 100;
+  const sign = percent > 0 ? "+" : percent < 0 ? "-" : "";
+  return `${sign}${Math.abs(percent).toFixed(1)}%`;
+};
+
 export const parseSize = (value) => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
