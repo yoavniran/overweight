@@ -1,5 +1,5 @@
 import path from "node:path";
-import { formatDiff } from "../utils/size.js";
+import { formatDiff, formatDiffPercent } from "../utils/size.js";
 import {
   DEFAULT_BASELINE_THRESHOLD,
   parseBaselineThreshold,
@@ -43,7 +43,7 @@ export const mergeWithBaseline = (rows, baseline) => {
     const previous = map.get(row.file);
 
     if (!previous) {
-      return { ...row, baselineSize: "N/A", baselineDiff: "N/A", trend: "N/A" };
+      return { ...row, baselineSize: "N/A", baselineDiff: "N/A", diffPercent: null, trend: "N/A" };
     }
 
     const delta = row.sizeBytes - (previous.sizeBytes || 0);
@@ -52,6 +52,7 @@ export const mergeWithBaseline = (rows, baseline) => {
       ...row,
       baselineSize: previous.size,
       baselineDiff: formatDiff(delta),
+      diffPercent: formatDiffPercent(delta, previous.sizeBytes),
       trend: delta === 0 ? "➖" : delta > 0 ? "🔺" : "⬇"
     };
   });

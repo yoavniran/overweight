@@ -12,6 +12,18 @@ const statusEmoji = (row) => {
 };
 
 /**
+ * Render the Δ cell as the change between the current size and the recorded
+ * baseline, appending the percentage change when available (e.g. "+1.2 kB (+5.0%)").
+ * Falls back to "N/A" when there is no baseline to compare against.
+ * @param {Object} row - Summary row
+ * @returns {string} Delta display value
+ */
+const diffCell = (row) => {
+  const change = row.baselineDiff ?? "N/A";
+  return row.diffPercent ? `${change} (${row.diffPercent})` : change;
+};
+
+/**
  * Build summary rows from check results
  * @param {Array} results - Check results
  * @returns {Array} Summary rows
@@ -52,7 +64,7 @@ export const toTableData = (rows) => [
     { data: row.file },
     { data: row.size },
     { data: row.limit },
-    { data: row.diff },
+    { data: diffCell(row) },
     { data: row.trend || "N/A" }
   ])
 ];
@@ -69,7 +81,7 @@ export const renderHtmlTable = (rows) => {
   const body = rows
     .map(
       (row) =>
-        `<tr><td>${statusEmoji(row)}</td><td>${row.label}</td><td>${row.file}</td><td>${row.size}</td><td>${row.limit}</td><td>${row.diff}</td><td>${row.trend || "N/A"}</td></tr>`
+        `<tr><td>${statusEmoji(row)}</td><td>${row.label}</td><td>${row.file}</td><td>${row.size}</td><td>${row.limit}</td><td>${diffCell(row)}</td><td>${row.trend || "N/A"}</td></tr>`
     )
     .join("");
 
