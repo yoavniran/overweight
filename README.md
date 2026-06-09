@@ -292,6 +292,9 @@ baseline is rewritten. Its value's shape decides how it's interpreted:
 
 - The project is ESM-only and built via `tsup`
 - Conventional commits are enforced via `simple-git-hooks` + `commitlint`.
+- `semantic-release` uses the **conventionalcommits** preset, so a `!` after the type/scope
+  (e.g. `feat!: …`, `chore!: …`) or a `BREAKING CHANGE:` footer triggers a **major** bump.
+  `feat:` → minor, `fix:`/`perf:` → patch; `chore`/`refactor`/`docs` alone trigger no release.
 - `pnpm run release` triggers `semantic-release`, which:
   - Checks commit history,
   - Updates the changelog,
