@@ -1,3 +1,27 @@
+## [2.0.0](https://github.com/yoavniran/overweight/compare/v1.3.10...v2.0.0) (2026-06-09)
+
+### ⚠ BREAKING CHANGES
+
+* action requires node 24 (#57)
+* action requires node 24
+
+### Features
+
+* Improve consistency ([#55](https://github.com/yoavniran/overweight/issues/55)) ([8ed1a3f](https://github.com/yoavniran/overweight/commit/8ed1a3f5576256cc6673c2de3632d005fa7a41ec))
+* introduce configurable threshold for tolerance ([c3c5214](https://github.com/yoavniran/overweight/commit/c3c5214d606336e8a862272696117b42d46bdc15))
+* introduce configurable threshold for tolerance ([cade63e](https://github.com/yoavniran/overweight/commit/cade63ec297ba0d6cbed5d9462fb5fc2b3124992))
+
+### Bug Fixes
+
+* correct readme section on baseline updates ([78360eb](https://github.com/yoavniran/overweight/commit/78360eb1a13ccc9ff27b2da86112cb4571f10714))
+* correct readme section on baseline updates ([#54](https://github.com/yoavniran/overweight/issues/54)) ([58fb0b8](https://github.com/yoavniran/overweight/commit/58fb0b86a42e6dd97c869761533cacd8b8c1480b))
+* use core actions correctly ([4f4e189](https://github.com/yoavniran/overweight/commit/4f4e18978fabaf5662928956287cc3550743aa3b))
+
+### Miscellaneous Chores
+
+* action requires node 24 ([9f16685](https://github.com/yoavniran/overweight/commit/9f16685650b1300ef15097608413b19caecfa6fc))
+* action requires node 24 ([#57](https://github.com/yoavniran/overweight/issues/57)) ([29a0c75](https://github.com/yoavniran/overweight/commit/29a0c755d87db298eaeb5a06b7140cf941cd544b))
+
 ## [1.3.10](https://github.com/yoavniran/overweight/compare/v1.3.9...v1.3.10) (2025-12-02)
 
 
