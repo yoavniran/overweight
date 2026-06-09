@@ -1,3 +1,10 @@
+## [2.1.0](https://github.com/yoavniran/overweight/compare/v2.0.0...v2.1.0) (2026-06-09)
+
+### Features
+
+* add percent diff in GH summary ([b2ff49c](https://github.com/yoavniran/overweight/commit/b2ff49cbc259c743e1d39ca8dc7e3a07fcb12395))
+* add percent diff in GH summary ([#63](https://github.com/yoavniran/overweight/issues/63)) ([37a445d](https://github.com/yoavniran/overweight/commit/37a445d014c1bb090e5e1248185682bbcdc59ac7))
+
 ## [2.0.0](https://github.com/yoavniran/overweight/compare/v1.3.10...v2.0.0) (2026-06-09)
 
 ### ⚠ BREAKING CHANGES
