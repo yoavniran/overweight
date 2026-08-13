@@ -1,3 +1,10 @@
+## [2.2.0](https://github.com/yoavniran/overweight/compare/v2.1.0...v2.2.0) (2026-08-13)
+
+### Features
+
+* add typings ([1786d19](https://github.com/yoavniran/overweight/commit/1786d19a69166d4d300d42c20e21f1dcb42b75a4))
+* add typings ([#65](https://github.com/yoavniran/overweight/issues/65)) ([8cf3267](https://github.com/yoavniran/overweight/commit/8cf32678ba82eb89175ca52060c1a20bed5b9d1d))
+
 ## [2.1.0](https://github.com/yoavniran/overweight/compare/v2.0.0...v2.1.0) (2026-06-09)
 
 ### Features
