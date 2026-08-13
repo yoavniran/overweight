@@ -37,7 +37,12 @@ Two separate build configs run in sequence:
    (`@actions/*`) work inside the ESM output. The action build runs with `clean: false` so it
    doesn't wipe the first build's output.
 
-No `dts` is emitted. The package is `"type": "module"` and ESM-only.
+No `dts` is emitted by tsup. Types are **hand-written** in `types/index.d.ts` (shipped via the
+`types` export condition and the `files` array) and must be kept in sync with `src/index.js`'s
+exports. `tests/types/index.test-d.ts` + `tsconfig.json` guard that: `pnpm run typecheck` runs
+`tsc --noEmit` over both (it maps the `overweight` specifier to the local declarations). The
+declarations avoid `@types/node` (buffers are typed as `Uint8Array`) so consumers need no extra
+deps. The package is `"type": "module"` and ESM-only.
 
 ## Core engine flow (src/core/run-checks.js)
 

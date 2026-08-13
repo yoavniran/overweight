@@ -10,8 +10,10 @@
   "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.js",
+  "types": "./types/index.d.ts",
   "exports": {
     ".": {
+      "types": "./types/index.d.ts",
       "import": "./dist/index.js"
     },
     "./cli": "./dist/cli.js",
@@ -23,14 +25,16 @@
   "files": [
     "dist",
     "!dist/action",
+    "types",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json",
     "test:watch": "vitest",
-    "check": "pnpm run test && pnpm run build",
+    "check": "pnpm run test && pnpm run typecheck && pnpm run build",
     "release": "semantic-release",
     "prepare": "simple-git-hooks",
     "prepublishOnly": "pnpm run build",
@@ -71,6 +75,7 @@
     "semantic-release": "^25.0.3",
     "simple-git-hooks": "^2.13.1",
     "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.8"
   },
   "simple-git-hooks": {
