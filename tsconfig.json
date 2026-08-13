@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": [],
+    "paths": {
+      "overweight": ["./types/index.d.ts"]
+    }
+  },
+  "include": ["types/**/*.d.ts", "tests/types/**/*.ts"]
+}

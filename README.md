@@ -162,6 +162,55 @@ if (result.stats.hasFailures) {
 
 A `BaselineEntry` is `{ label, file, tester, size, sizeBytes, limit, limitBytes }`.
 
+### TypeScript
+
+Typings ship with the package (`types/index.d.ts`) — no `@types/overweight` needed, and no
+`@types/node` required to consume them.
+
+```ts
+import {
+  runChecks,
+  normalizeConfig,
+  type OverweightConfig,
+  type CheckResult,
+  type Tester
+} from "overweight";
+
+const config: OverweightConfig = {
+  root: "dist",
+  files: [{ path: "*.js", maxSize: "15 kB", compression: "brotli" }]
+};
+
+const halfTester: Tester = {
+  id: "half",
+  label: "Half",
+  measure: (buffer) => ({ bytes: buffer.byteLength / 2 })
+};
+
+const result = await runChecks(normalizeConfig(config), { testers: { half: halfTester } });
+
+result.results.forEach((entry: CheckResult) => {
+  // `error` discriminates the union: rows that matched no file have `size: null`
+  if (entry.error !== undefined) {
+    console.warn(`${entry.pattern}: ${entry.error}`);
+  } else {
+    console.log(`${entry.filePath} ${entry.size} / ${entry.maxSize} bytes`);
+  }
+});
+```
+
+Exported types:
+
+| Type | Purpose |
+|------|---------|
+| `OverweightConfig`, `FileRule`, `OverweightConfigInput` | Config as authored (`OverweightConfigInput` also allows the bare-array shorthand). |
+| `NormalizedConfig`, `NormalizedFileRule`, `ConfigSource` | Config after `normalizeConfig`/`loadConfig`. |
+| `CheckResult`, `MeasuredCheckResult`, `MissingCheckResult` | Result rows; the union discriminates on `error`. |
+| `RunChecksResult`, `RunChecksStats`, `RunChecksOptions` | `runChecks` input/output. |
+| `Tester`, `TesterContext`, `TesterMeasurement`, `TesterId`, `BuiltinTesterId` | Custom tester authoring. |
+| `BaselineEntry`, `BaselineThreshold`, `BaselineThresholdInput`, `ReconcileBaselineResult` | Baseline primitives. |
+| `SizeInput` | `string \| number` size values (`"12 kB"`, `12000`). |
+
 ### Baseline tracking with a tolerance threshold
 
 Bundlers and minifiers rarely emit byte-identical output across builds (embedded build dates,
